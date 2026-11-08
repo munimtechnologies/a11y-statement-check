@@ -1,2 +1,98 @@
 # a11y-statement-check
-Find unfinished vendor templates ([Your School], YOUR MUNICIPALITY, [Your Agency/Website Name]) in website accessibility statements. CLI + agent skill. Apache-2.0. Made by MV2 of Munim, Inc. with AI agents.
+
+Is a website's accessibility statement still an unfinished vendor template?
+
+`statement_template_check.py` reads one accessibility statement (a URL, a saved HTML page or a
+plain-text draft) and reports the placeholders that vendor templates leave behind until someone
+fills them in, which WCAG versions the page names, and dated or stock wording worth a second look.
+It is also an **agent skill** (`skills/accessibility-statement-check/SKILL.md`), so coding agents
+such as Claude Code, Codex and Cursor know when to run it and how to read its results.
+
+Made by MV2 of Munim, Inc. with AI agents; not yet checked by a person. Apache-2.0. It reads what
+a statement says, not whether a website is accessible, and it is not legal advice.
+
+## Why
+
+MV2's open censuses of US public websites
+([title2-pdf-census](https://github.com/munimtechnologies/title2-pdf-census)) found:
+
+- **235 of 5,243** city, county and town website hosts (4.48%) serve an unfinished vendor statement
+  template at a stock address: 222 at CivicPlus's `/153/Accessibility` and 13 at Revize's
+  `/accessibility_statement/index.php`
+  ([stock-153](https://github.com/munimtechnologies/title2-pdf-census/tree/main/results/stock-153),
+  [stock-revize](https://github.com/munimtechnologies/title2-pdf-census/tree/main/results/stock-revize)).
+- **129 of 933** school-district accessibility pages read (13.83%) still carry a 2017 template's
+  placeholders ("the Your School website", accessibility@yourschool.com, 555-555-5555), all on
+  sites with Finalsite markup
+  ([district-pages](https://github.com/munimtechnologies/title2-pdf-census/tree/main/results/district-pages)).
+- Only **6** of the same 5,243 hosts serve the Accessibility Checker WordPress plugin's statement
+  draft at `/accessibility-statement/`, 3 of them unfinished
+  ([stock-equalize](https://github.com/munimtechnologies/title2-pdf-census/tree/main/results/stock-equalize)).
+- Among accessibility pages of governments of 50,000 or more people that name a WCAG version,
+  55.71% name only WCAG 2.0
+  ([a11y-pages](https://github.com/munimtechnologies/title2-pdf-census/tree/main/results/a11y-pages)),
+  while the ADA Title II rule (28 CFR 35.200) adopts WCAG 2.1 Level AA.
+
+## Use it
+
+Python 3.8 or newer, standard library only, nothing to install:
+
+```
+python skills/accessibility-statement-check/statement_template_check.py https://www.example.gov/accessibility
+python skills/accessibility-statement-check/statement_template_check.py --site www.example.gov
+python skills/accessibility-statement-check/statement_template_check.py --text draft-statement.txt --json
+```
+
+`--site` tries the three stock addresses (`/153/Accessibility`,
+`/accessibility_statement/index.php`, `/accessibility-statement`), honours robots.txt and pauses
+one second between requests. `--file` reads a saved HTML page. Exit code 1: a template placeholder
+was found; 0: none found; 2: no page could be read. That makes it usable in CI on a statement draft
+kept in a repository.
+
+Example output for an unfinished template (an illustrative page, not a real site):
+
+```
+https://www.example.gov/153/Accessibility
+  read: 1874 characters of text (stock address: civicplus)
+  PLACEHOLDER government/your_municipality: YOUR MUNICIPALITY
+  WCAG versions named: 2.0
+  NOTE placeholder: template placeholders are still in the text: fill them in (name, contact, standard, dates) or remove them
+  NOTE only_wcag_2_0: names WCAG 2.0 only; the ADA Title II rule (28 CFR 35.200) adopts WCAG 2.1 Level AA, so check which version the site actually targets
+  verdict: unfinished template (1 placeholder)
+```
+
+## As an agent skill
+
+Install the skill folder into your agent (for example with the open `skills` CLI:
+`npx skills add munimtechnologies/a11y-statement-check`), or copy
+`skills/accessibility-statement-check/` into your agent's skills directory. The skill tells the
+agent to change nothing without the user, never to present a clean result as a conformance or
+legal finding, and not to crawl lists of other people's sites.
+
+## What it checks
+
+| Group | Placeholders (case and spacing inside brackets ignored where marked) |
+|---|---|
+| `revize` | [Your Agency/Website Name], [Date], [Contact Email], [Contact Phone], [Agency Address], [X business days] |
+| `accessibility-checker` | [YOUR COMPANY NAME], [SPECIFIC STANDARD, VERSION, LEVEL], [LIST ACCESSIBILITY FEATURES HERE], [LIST ITEMS YOU'RE WORKING TO FIX HERE], [YOUR ACCESSIBILITY EMAIL ADDRESS], [YOUR PHONE NUMBER] |
+| `school` | [Your School] and similar, "the Your School", yourschool.com-style addresses, 555-555-5555, "within # business days" |
+| `government` | YOUR MUNICIPALITY, "only meant as a template", NAME / TITLE / EMAIL / PHONE, capitalised fields such as [INSERT ...] or [CITY NAME] |
+| `generic` | [Insert ...] |
+
+Notes (never counted in the exit code): a bracketed phrase that may be a placeholder (Cloudflare's
+hidden "[email protected]" is skipped), WCAG 2.0 named alone, WCAG mentioned without a version or
+not at all, April 24, 2026 named without a later Title II date (an interim final rule of
+2026-04-20 moved the dates to April 26, 2027 and April 26, 2028), a 2017 "Accessibility Statement
+Generator" credit, and a vendor's stock "We work to comply with Section 508 as well as ..."
+sentence.
+
+Limits: it reads visible text only (not PDFs, not text split across tags in the middle of a
+word), one page per address, and a filled-in template can still be wrong about the site.
+
+## Tests
+
+```
+python -m unittest -v test_statement_template_check.py
+```
+
+Offline; no network is used.
