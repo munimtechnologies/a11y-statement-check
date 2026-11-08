@@ -48,6 +48,29 @@ FILLED = ("Accessibility Statement To help us make the Springfield Public School
           "accessible for people with disabilities, and user friendly for everyone. Let us know "
           "if you have any problems accessing the site: email the webmaster of the district or "
           "call the district office during school hours.")
+# GOV.UK's sample accessibility statement with its fields left in (wording as published on GOV.UK).
+UK_SAMPLE = ("Accessibility statement for [website name]. This accessibility statement applies to "
+             "[scope of statement, for example, website or domain to which the statement applies]. "
+             "This website is run by [name of organisation]. We want as many people as possible to "
+             "be able to use this website. If you need information on this website in a different "
+             "format contact us at [email address] or call [phone number]. We'll consider your "
+             "request and get back to you in [number] days. This website is partially compliant "
+             "with the Web Content Accessibility Guidelines version 2.2 AA standard, due to the "
+             "non-compliances listed below. This statement was prepared on [date when it was first "
+             "published]. It was last reviewed on [date when it was last reviewed]. The test was "
+             "carried out by [add name of organisation that carried out test, or indicate that you "
+             "did your own testing].")
+UK_FILLED = ("Accessibility statement for Example District Council. This accessibility statement "
+             "applies to the www.example.gov.uk website. This website is run by Example District "
+             "Council. We want as many people as possible to be able to use this website. This "
+             "website is partially compliant with the Web Content Accessibility Guidelines version "
+             "2.1 AA standard, due to the non-compliances listed below. This statement was prepared "
+             "on 1 March 2021. It was last reviewed on 10 March 2026.")
+UK_NOTES = ("This is a sample accessibility statement for a fictional public sector website. This "
+            "website is partially compliant with the Web Content Accessibility Guidelines version "
+            "2.0 AA standard. [Note: this wording is legally required and must not be changed.] "
+            "[Select (c) if most requirements of the technical specification are not met.] We'll "
+            "get back to you within [rough timing].")
 
 
 def page(text):
@@ -138,6 +161,50 @@ class TemplateTests(unittest.TestCase):
         self.assertEqual(r["verdict"], "no template placeholder found")
 
 
+class GovUkTests(unittest.TestCase):
+    def test_sample_fields_left_in(self):
+        r = c.check_text(UK_SAMPLE)
+        self.assertEqual(ids(r), ["website_name", "scope", "organisation_name", "email_address",
+                                  "phone", "number_of_days", "first_published", "last_reviewed",
+                                  "tester"])
+        self.assertEqual(r["groups"], ["gov-uk"])
+        self.assertEqual(r["placeholders"][2]["text"], "[name of organisation]")
+        self.assertTrue(r["placeholders"][1]["text"].startswith("[scope of statement, for example"))
+        self.assertTrue(r["placeholders"][1]["text"].endswith("applies]"))
+        self.assertEqual(r["templates"], ["gov_uk_sample"])
+        self.assertEqual((r["wcag_versions"], r["highest"]), (["2.2"], "2.2"))
+        self.assertEqual(note_ids(r), ["placeholder"])
+        self.assertEqual(r["verdict"], "unfinished template (9 placeholders)")
+
+    def test_filled_uk_statement_on_wcag_2_1(self):
+        r = c.check_text(UK_FILLED)
+        self.assertIs(r["placeholder"], False)
+        self.assertEqual(r["templates"], ["gov_uk_sample"])
+        self.assertEqual(r["wcag_versions"], ["2.1"])
+        self.assertEqual(note_ids(r), ["uk_older_wcag"])
+        self.assertIn("names WCAG 2.1 as the highest version", r["notes"][0]["message"])
+        self.assertIn("WCAG 2.2 AA", r["notes"][0]["message"])
+
+    def test_guidance_notes_and_sample_notice(self):
+        r = c.check_text(UK_NOTES)
+        self.assertEqual(ids(r), ["sample_notice", "rough_timing", "guidance_note", "select_option"])
+        self.assertTrue(r["placeholders"][2]["text"].startswith("[Note: this wording"))
+        self.assertTrue(r["placeholders"][3]["text"].startswith("[Select (c) if most"))
+        # a UK statement gets the GOV.UK note, not the US ADA Title II one
+        self.assertEqual(note_ids(r), ["placeholder", "uk_older_wcag"])
+        self.assertIn("names WCAG 2.0 as the highest version", r["notes"][1]["message"])
+
+    def test_capital_letters_and_other_fields(self):
+        r = c.check_text("This website is run by [Name of Organisation]. You can also "
+                         "[add any other contact details]. See [add link to roadmap]. Our "
+                         "[example of non-essential document] is out of scope. The "
+                         "[insert one of the following: 'non-compliances' or 'exemptions'] are "
+                         "listed below.")
+        self.assertEqual(ids(r), ["organisation_name", "other_contact", "add_link",
+                                  "insert_one_of", "example_document"])
+        self.assertEqual(r["groups"], ["gov-uk"])
+
+
 class NoteTests(unittest.TestCase):
     def test_possible_placeholder_skips_hidden_email(self):
         r = c.check_text("Questions about the Web Content Accessibility Guidelines 2.1 AA: write "
@@ -225,6 +292,17 @@ class MainTests(unittest.TestCase):
         self.assertIn("PLACEHOLDER school/your_school: the Your School", out.getvalue())
         self.assertIn("1 of 1 page read with a template placeholder", out.getvalue())
 
+    def test_uk_text_file(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "statement.txt")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(UK_SAMPLE)
+            out = io.StringIO()
+            code = c.main(["--text", path], out=out)
+        self.assertEqual(code, 1)
+        self.assertIn("PLACEHOLDER gov-uk/website_name: [website name]", out.getvalue())
+        self.assertIn("template wording: gov_uk_sample", out.getvalue())
+
     def test_html_file_json(self):
         with tempfile.TemporaryDirectory() as d:
             path = os.path.join(d, "statement.html")
@@ -268,6 +346,14 @@ class SkillTests(unittest.TestCase):
             for line in lines:
                 for flag in re.findall(r"(?<![\w-])--[a-z][a-z-]*", line):
                     self.assertIn(flag, options, (name, flag))
+
+    def test_every_group_is_documented(self):
+        readme = self.read(HERE, "README.md")
+        skill = self.read(SKILL_DIR, "SKILL.md")
+        for group in c.GROUPS:
+            self.assertIn("`%s`" % group, readme, group)
+            self.assertIn("`%s`" % group, skill, group)
+        self.assertEqual(sorted(set(g for g, _, _, _ in c.PLACEHOLDER_RULES)), sorted(c.GROUPS))
 
 
 if __name__ == "__main__":

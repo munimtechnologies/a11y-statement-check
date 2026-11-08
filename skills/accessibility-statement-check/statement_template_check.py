@@ -1,17 +1,21 @@
-"""statement_template_check 0.1.0: is a website's accessibility statement still an unfinished template?
+"""statement_template_check 0.3.0: is a website's accessibility statement still an unfinished template?
 
 Reads one accessibility statement (a URL, a saved HTML file or a plain-text file) and reports:
 
-  * placeholders that vendor statement templates leave behind until someone fills them in, with
-    the rules of MV2's published censuses of US government and school-district accessibility
-    pages (https://github.com/munimtechnologies/title2-pdf-census): Revize's stock statement
+  * placeholders that statement templates leave behind until someone fills them in, with the
+    rules of MV2's published censuses of US government and school-district accessibility pages
+    (https://github.com/munimtechnologies/title2-pdf-census): Revize's stock statement
     ("[Your Agency/Website Name]", "[X business days]"), the statement draft of the Accessibility
     Checker WordPress plugin ("[YOUR COMPANY NAME]", "[SPECIFIC STANDARD, VERSION, LEVEL]"),
     school-website templates ("the Your School website", "[Your School]",
     accessibility@yourschool.com, 555-555-5555, "within # business days") and the government
     template's "YOUR MUNICIPALITY", "NAME, TITLE, EMAIL, PHONE" and capitalised bracketed fields;
+    since 0.3.0 also the fields and guidance notes of GOV.UK's sample accessibility statement for
+    UK public sector websites ("[website name]", "[name of organisation]", "[scope of statement
+    ...]", "[number]", "[date when it was first published]", "[Note: ...]", "[Select (a) ...]");
   * which WCAG versions the page names (the ADA Title II rule for state and local governments,
-    28 CFR 35.200, adopts WCAG 2.1 Level AA), and dated or stock wording worth a second look.
+    28 CFR 35.200, adopts WCAG 2.1 Level AA; GOV.UK's sample statement names WCAG 2.2 AA), and
+    dated or stock wording worth a second look.
 
 With --site it asks a site for the three stock addresses where those censuses found most
 unfinished templates (/153/Accessibility, /accessibility_statement/index.php and
@@ -33,7 +37,7 @@ import urllib.parse
 import urllib.request
 import urllib.robotparser
 
-__version__ = "0.1.0"
+__version__ = "0.3.0"
 
 UA = ("statement-template-check/%s (MV2, Munim, Inc.; mv2@munimtech.com; reads public pages only)"
       % __version__)
@@ -44,7 +48,8 @@ STOCK_PATHS = (("civicplus", "/153/Accessibility"),
                ("accessibility-statement", "/accessibility-statement"))
 
 # (group, id, pattern, ignore case). Vendor-specific rules come first: a stretch of text matched
-# by an earlier rule is not counted again by a later, more general one.
+# by an earlier rule is not counted again by a later, more general one. The GOV.UK sample's
+# "[date]" field is the same text as Revize's "[Date]" and is reported as revize/date.
 PLACEHOLDER_RULES = (
     ("revize", "agency_name", r"\[\s*your\s+agency\s*/\s*website\s+name\s*\]", True),
     ("revize", "date", r"\[\s*date\s*\]", True),
@@ -62,6 +67,28 @@ PLACEHOLDER_RULES = (
     ("accessibility-checker", "accessibility_email",
      r"\[\s*your\s+accessibility\s+email\s+address\s*\]", True),
     ("accessibility-checker", "phone_number", r"\[\s*your\s+phone\s+number\s*\]", True),
+    # GOV.UK's sample accessibility statement (for a fictional public sector website), as published
+    # at gov.uk/government/publications/sample-accessibility-statement (read 2026-11-08).
+    ("gov-uk", "sample_notice",
+     r"\bsample\s+accessibility\s+statement\s+for\s+a\s+fictional\s+public\s+sector\s+website\b", True),
+    ("gov-uk", "website_name", r"\[\s*website\s+name\s*\]", True),
+    ("gov-uk", "scope", r"\[\s*scope\s+of\s+(?:the\s+)?statement\b[^\[\]]{0,100}\]", True),
+    ("gov-uk", "organisation_name",
+     r"\[\s*(?:the\s+)?name\s+of\s+(?:the\s+|your\s+)?organi[sz]ation\s*\]", True),
+    ("gov-uk", "email_address", r"\[\s*email\s+address\s*\]", True),
+    ("gov-uk", "phone", r"\[\s*(?:tele)?phone\s+number\s*\]", True),
+    ("gov-uk", "other_contact", r"\[\s*add\s+any\s+other\s+contact\s+details\s*\]", True),
+    ("gov-uk", "number_of_days", r"\[\s*number\s*\]", True),
+    ("gov-uk", "add_link", r"\[\s*add\s+(?:a\s+)?link\s+to\b[^\[\]]{0,60}\]", True),
+    ("gov-uk", "insert_one_of", r"\[\s*insert\s+one\s+of\s+the\s+following\b[^\[\]]{0,120}\]", True),
+    ("gov-uk", "rough_timing", r"\[\s*rough\s+timing\s*\]", True),
+    ("gov-uk", "example_document", r"\[\s*example\s+of\s+(?:a\s+)?non-essential\s+document\s*\]", True),
+    ("gov-uk", "first_published", r"\[\s*date\s+when\s+it\s+was\s+first\s+published\s*\]", True),
+    ("gov-uk", "last_reviewed", r"\[\s*date\s+when\s+it\s+was\s+last\s+reviewed\s*\]", True),
+    ("gov-uk", "tester",
+     r"\[\s*add\s+name\s+of\s+(?:the\s+)?organi[sz]ation\s+that\s+carried\s+out\b[^\[\]]{0,80}\]", True),
+    ("gov-uk", "guidance_note", r"\[\s*note\s*:[^\[\]]{0,60}", True),
+    ("gov-uk", "select_option", r"\[\s*select\s+\([abc]\)[^\[\]]{0,60}", True),
     ("school", "school_bracket",
      r"\[\s*(?:(?:your|the|insert|name\s+of(?:\s+the)?)\s+)?(?:school|district|school\s+district|"
      r"organi[sz]ation|campus)(?:\s+(?:name|district|website|url))?\s*\]", True),
@@ -80,7 +107,7 @@ PLACEHOLDER_RULES = (
     ("generic", "insert_bracket", r"\[\s*insert\b[^\[\]]{0,60}\]", True),
 )
 PLACEHOLDER_RES = tuple((g, i, re.compile(p, re.I if ic else 0)) for g, i, p, ic in PLACEHOLDER_RULES)
-GROUPS = ("revize", "accessibility-checker", "school", "government", "generic")
+GROUPS = ("revize", "accessibility-checker", "gov-uk", "school", "government", "generic")
 
 # Bracketed text that may be a placeholder (reported as "possible", never counted). Cloudflare's
 # "[email protected]" (an email address hidden from scrapers) is not one.
@@ -89,7 +116,9 @@ POSSIBLE_RE = re.compile(r"\[\s*(?:your|insert|enter|contact|agency|organi[sz]at
                          re.I)
 EMAIL_PROTECTED_RE = re.compile(r"\[\s*email\s+protected\s*\]", re.I)
 
-# Template wording, filled in or not (described only).
+# Template wording, filled in or not (described only). gov_uk_sample is the compliance sentence
+# that UK public sector bodies must keep unchanged ("This website is partially compliant with the
+# Web Content Accessibility Guidelines version 2.2 AA standard ...").
 TEMPLATE_RULES = (
     ("t2017_your_school", r"a\s+positive\s+place\s+for\s+everyone"),
     ("finalsite_2026", r"\bbuilt\s+with\s+WCAG\s+2\.1\s+AA\s+guidelines\s+in\s+mind\b"),
@@ -97,6 +126,8 @@ TEMPLATE_RULES = (
     ("accessibility_checker", r"is\s+committed\s+to\s+providing\s+a\s+fully\s+accessible\s+website\s+"
                               r"experience\s+for\s+all\s+users\s+of\s+all\s+abilities"),
     ("stock_508", r"We work to comply with Section 508 as well as"),
+    ("gov_uk_sample", r"\bThis\s+(?:website|app|application)\s+is\s+(?:fully|partially|not)\s+compliant\s+"
+                      r"with\s+the\s+Web\s+Content\s+Accessibility\s+Guidelines\b"),
 )
 TEMPLATE_RES = tuple((t, re.compile(p, re.I)) for t, p in TEMPLATE_RULES)
 
@@ -120,6 +151,9 @@ NOTES = {
     "possible_placeholder": "bracketed text that may be an unfilled placeholder: %s",
     "only_wcag_2_0": "names WCAG 2.0 only; the ADA Title II rule (28 CFR 35.200) adopts WCAG 2.1 "
                      "Level AA, so check which version the site actually targets",
+    "uk_older_wcag": "uses GOV.UK's compliance wording but names WCAG %s as the highest version; "
+                     "GOV.UK's current sample statement names WCAG 2.2 AA, so check which version "
+                     "the site was tested against",
     "no_wcag_version": "mentions WCAG without naming a version",
     "no_wcag": "does not mention WCAG at all",
     "old_title2_date": "names April 24, 2026 (the first ADA Title II date of the 2024 rule) and no "
@@ -155,6 +189,8 @@ def check_text(text):
         versions.update(re.findall(r"2\.[0-2]", m.group(1)))
     wcag_named = bool(WCAG_ANY_RE.search(text))
     templates = [t for t, rx in TEMPLATE_RES if rx.search(text)]
+    uk = "gov_uk_sample" in templates
+    highest = max(versions) if versions else ""
     dates = {"2026-04-24": bool(DATE_2026_RE.search(text)),
              "2027-04-26": bool(DATE_2027_RE.search(text)),
              "2028-04-26": bool(DATE_2028_RE.search(text))}
@@ -166,13 +202,17 @@ def check_text(text):
         note("placeholder")
     if possible:
         note("possible_placeholder", possible)
-    if versions == {"2.0"}:
+    if uk:
+        if highest in ("2.0", "2.1"):
+            note("uk_older_wcag", highest)
+    elif versions == {"2.0"}:
         note("only_wcag_2_0")
     if wcag_named and not versions:
         note("no_wcag_version")
     if not wcag_named:
         note("no_wcag")
-    if dates["2026-04-24"] and not (dates["2027-04-26"] or dates["2028-04-26"]):
+    if (not uk and dates["2026-04-24"]
+            and not (dates["2027-04-26"] or dates["2028-04-26"])):
         note("old_title2_date")
     if GENERATOR_RE.search(text):
         note("generator")
@@ -182,7 +222,7 @@ def check_text(text):
             "groups": [g for g in GROUPS if any(p["group"] == g for p in found)],
             "possible_placeholder": possible, "templates": templates,
             "wcag_named": wcag_named, "wcag_versions": sorted(versions),
-            "highest": max(versions) if versions else "", "dates": dates,
+            "highest": highest, "dates": dates,
             "notes": notes, "text_chars": len(text),
             "verdict": ("unfinished template (%d placeholder%s)"
                         % (len(found), "" if len(found) == 1 else "s")) if found

@@ -28,6 +28,9 @@ HTML = ("<!doctype html><html><head><title>Accessibility</title><script>var x = 
         "positive place for everyone, we've been using the Web Content Accessibility Guidelines "
         "(WCAG) 2.0.</p><p>Call 555-555-5555.</p><p>We want everyone who visits this website to "
         "feel welcome and find the information they need.</p></body></html>")
+UK = ("# Accessibility statement for [website name]\n\n"
+      "This website is run by Example Council.\n"
+      "Contact us on [phone number].\n" + FILLER + "\n")
 
 
 def fake_get(pages):
@@ -90,6 +93,16 @@ class ActionRunTests(Repo):
         self.assertIn("| docs/draft.md | unfinished template (3 placeholders) |", summary)
         self.assertIn("| docs/clean.md | no template placeholder found | none | 2.1 |", summary)
         self.assertIn("not legal advice", summary)
+
+    def test_uk_draft(self):
+        self.write("docs/uk.md", UK)
+        code, log = self.run_action(text_files="docs/uk.md")
+        self.assertEqual(code, 1)
+        self.assertIn("::error file=docs/uk.md,line=1,title=Accessibility statement placeholder::"
+                      "'[website name]' is still a template placeholder (gov-uk/website_name)", log)
+        self.assertIn("::error file=docs/uk.md,line=4,title=Accessibility statement placeholder::"
+                      "'[phone number]' is still a template placeholder (gov-uk/phone)", log)
+        self.assertEqual(log.count("::error "), 2)
 
     def test_clean_draft_passes(self):
         code, log = self.run_action(text_files="docs/clean.md")
@@ -223,7 +236,8 @@ class ActionFileTests(unittest.TestCase):
             readme = f.read()
         for name in self.section("inputs") + self.section("outputs"):
             self.assertIn("`%s`" % name, readme)
-        self.assertIn("uses: munimtechnologies/a11y-statement-check@v0.2.0", readme)
+        self.assertIn("uses: munimtechnologies/a11y-statement-check@v%s" % a.__version__, readme)
+        self.assertEqual(a.__version__, a.stc.__version__)
 
 
 if __name__ == "__main__":
