@@ -16,15 +16,17 @@ a statement says, not whether a website is accessible, and it is not legal advic
 MV2's open censuses of US public websites
 ([title2-pdf-census](https://github.com/munimtechnologies/title2-pdf-census)) found:
 
+- **1,067 of 11,581** US public school district website hosts (9.21%) serve an accessibility
+  statement that still carries a 2017 template's placeholders ("the Your School website",
+  accessibility@yourschool.com, 555-555-5555) at `/accessibility-statement`, 1,066 of them on
+  sites with Finalsite markup; 1,044 of the 1,067 name WCAG 2.0 as the highest version
+  ([district-stock](https://github.com/munimtechnologies/title2-pdf-census/tree/main/results/district-stock),
+  a pre-registered study; all four predictions held).
 - **235 of 5,243** city, county and town website hosts (4.48%) serve an unfinished vendor statement
   template at a stock address: 222 at CivicPlus's `/153/Accessibility` and 13 at Revize's
   `/accessibility_statement/index.php`
   ([stock-153](https://github.com/munimtechnologies/title2-pdf-census/tree/main/results/stock-153),
   [stock-revize](https://github.com/munimtechnologies/title2-pdf-census/tree/main/results/stock-revize)).
-- **129 of 933** school-district accessibility pages read (13.83%) still carry a 2017 template's
-  placeholders ("the Your School website", accessibility@yourschool.com, 555-555-5555), all on
-  sites with Finalsite markup
-  ([district-pages](https://github.com/munimtechnologies/title2-pdf-census/tree/main/results/district-pages)).
 - Only **6** of the same 5,243 hosts serve the Accessibility Checker WordPress plugin's statement
   draft at `/accessibility-statement/`, 3 of them unfinished
   ([stock-equalize](https://github.com/munimtechnologies/title2-pdf-census/tree/main/results/stock-equalize)).
