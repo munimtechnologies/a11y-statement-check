@@ -1,0 +1,58 @@
+# Copyright 2026 Munim, Inc. Licensed under the Apache License, Version 2.0 (Apache-2.0).
+# Made by MV2 of Munim, Inc. with AI agents.
+name: Accessibility statement template check
+description: Fail a pull request when an accessibility statement draft still carries vendor template placeholders such as "the Your School website" or [Your Agency/Website Name].
+author: MV2 of Munim, Inc.
+branding:
+  icon: check-square
+  color: blue
+inputs:
+  text-files:
+    description: Plain-text or Markdown statement drafts in the repository, one path or glob pattern per line (for example docs/accessibility*.md).
+    required: false
+    default: ""
+  html-files:
+    description: Saved HTML statement pages in the repository, one path or glob pattern per line.
+    required: false
+    default: ""
+  urls:
+    description: Published statement URLs to read, one per line (one request each, no crawling).
+    required: false
+    default: ""
+  fail-on-placeholder:
+    description: Fail the step when a template placeholder is found (true or false).
+    required: false
+    default: "true"
+  fail-on-unread:
+    description: Fail the step when a file pattern matches nothing or a URL cannot be read (true or false).
+    required: false
+    default: "true"
+  json-report:
+    description: Optional path where the full JSON report is written.
+    required: false
+    default: ""
+outputs:
+  placeholder-pages:
+    description: Number of statements read that still carry a template placeholder.
+    value: ${{ steps.check.outputs.placeholder-pages }}
+  pages-read:
+    description: Number of statements read.
+    value: ${{ steps.check.outputs.pages-read }}
+  unread:
+    description: Number of file patterns that matched nothing plus URLs that could not be read.
+    value: ${{ steps.check.outputs.unread }}
+runs:
+  using: composite
+  steps:
+    - id: check
+      shell: bash
+      env:
+        STC_TEXT_FILES: ${{ inputs.text-files }}
+        STC_HTML_FILES: ${{ inputs.html-files }}
+        STC_URLS: ${{ inputs.urls }}
+        STC_FAIL_ON_PLACEHOLDER: ${{ inputs.fail-on-placeholder }}
+        STC_FAIL_ON_UNREAD: ${{ inputs.fail-on-unread }}
+        STC_JSON_REPORT: ${{ inputs.json-report }}
+      run: |
+        PY="$(command -v python3 || command -v python)"
+        "$PY" -I "$GITHUB_ACTION_PATH/action_run.py"

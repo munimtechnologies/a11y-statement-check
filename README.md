@@ -6,7 +6,9 @@ Is a website's accessibility statement still an unfinished vendor template?
 plain-text draft) and reports the placeholders that vendor templates leave behind until someone
 fills them in, which WCAG versions the page names, and dated or stock wording worth a second look.
 It is also an **agent skill** (`skills/accessibility-statement-check/SKILL.md`), so coding agents
-such as Claude Code, Codex and Cursor know when to run it and how to read its results.
+such as Claude Code, Codex and Cursor know when to run it and how to read its results, and a
+**GitHub Action** (`action.yml`) that fails a pull request when a statement draft kept in the
+repository still has a placeholder.
 
 Made by MV2 of Munim, Inc. with AI agents; not yet checked by a person. Apache-2.0. It reads what
 a statement says, not whether a website is accessible, and it is not legal advice.
@@ -63,6 +65,46 @@ https://www.example.gov/153/Accessibility
   verdict: unfinished template (1 placeholder)
 ```
 
+## In CI (GitHub Action, since v0.2.0)
+
+Keep your statement draft in the repository and let a pull request fail while it still has a
+placeholder:
+
+```yaml
+name: accessibility statement
+on: [pull_request]
+jobs:
+  statement:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: munimtechnologies/a11y-statement-check@v0.2.0
+        with:
+          text-files: |
+            docs/accessibility*.md
+          html-files: |
+            site/accessibility/index.html
+```
+
+Inputs (all optional, but give at least one of the first three):
+
+| Input | What it does |
+|---|---|
+| `text-files` | Plain-text or Markdown drafts, one path or glob pattern per line (`docs/**/*.md` works) |
+| `html-files` | Saved or built HTML pages, one path or glob pattern per line |
+| `urls` | Published statement URLs, one per line; each is read once, with no crawling |
+| `fail-on-placeholder` | `true` (default) fails the step on a placeholder; `false` reports it as a warning |
+| `fail-on-unread` | `true` (default) fails the step when a pattern matches no file or a URL cannot be read |
+| `json-report` | A path to write the full JSON report to (for example to upload as an artifact) |
+
+Outputs: `placeholder-pages` (statements read that still carry a placeholder), `pages-read` and
+`unread`. Each placeholder becomes an annotation on the file and line where it was found, other
+notes (such as a statement that names only WCAG 2.0) become notices, and the job summary gets a
+table of every statement checked. The step runs `action_run.py` with the runner's own Python 3
+(standard library only, nothing installed); inputs reach it only as environment variables, never
+pasted into the shell command. Its tests run offline (`test_action.py`); it has not yet been run
+on GitHub's Windows runners.
+
 ## As an agent skill
 
 Install the skill folder into your agent (for example with the open `skills` CLI:
@@ -94,7 +136,14 @@ word), one page per address, and a filled-in template can still be wrong about t
 ## Tests
 
 ```
-python -m unittest -v test_statement_template_check.py
+python -m unittest -v test_statement_template_check.py test_action.py
 ```
 
 Offline; no network is used.
+
+## Changes
+
+- **0.2.0:** GitHub Action (`action.yml`, `action_run.py`, `test_action.py`): annotations at the
+  placeholder's line, a job-summary table, step outputs and an optional JSON report. The checker
+  itself is unchanged (0.1.0).
+- **0.1.0:** first release: the checker and the agent skill.
