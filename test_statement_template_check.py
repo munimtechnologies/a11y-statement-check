@@ -71,6 +71,25 @@ UK_NOTES = ("This is a sample accessibility statement for a fictional public sec
             "2.0 AA standard. [Note: this wording is legally required and must not be changed.] "
             "[Select (c) if most requirements of the technical specification are not met.] We'll "
             "get back to you within [rough timing].")
+# The Juniper Websites school template with its fields and editing notes left in (fields as seen
+# on live UK school pages on 2026-11-09; the sentences around them are shortened).
+JUNIPER = ("Accessibility Statement [This is a sample accessibility statement that you may want to "
+           "use. Prior to publication, please remove this text and any other instructions which "
+           "are in bold.] (School Name) Website Accessibility Statement. This website is run by "
+           "[School Name] and this statement applies to [Website Link and Date]. [Delete as "
+           "appropriate] [The above are examples only. Please use the checklist provided.] "
+           "[Please refer to the checklist provided to set out where the website is not "
+           "compliant with WCAG 2.2.] If you find any accessibility barriers, please contact us: "
+           "Email: [Accessibility Email Address]. Phone: [School Phone Number]. Mailing Address: "
+           "[School Mailing Address]. This statement was first prepared on [Date]. [Set out the "
+           "method used to prepare the statement.] [It is recommended that statements within "
+           "this accessibility statement are reviewed regularly.] [School Name] values diversity "
+           "and inclusion and is committed to providing an accessible online experience for all.")
+JUNIPER_FILLED = ("Accessibility Statement. This website is run by Example Primary School and this "
+                  "statement applies to www.example.sch.uk. Email office@example.sch.uk with any "
+                  "problems. We aim to meet the Web Content Accessibility Guidelines (WCAG) version "
+                  "2.2 AA. Example Primary School values diversity and inclusion and is committed "
+                  "to providing an accessible online experience for all.")
 
 
 def page(text):
@@ -205,6 +224,49 @@ class GovUkTests(unittest.TestCase):
         self.assertEqual(r["groups"], ["gov-uk"])
 
 
+class JuniperTests(unittest.TestCase):
+    def test_template_fields_and_editing_notes_left_in(self):
+        r = c.check_text(JUNIPER)
+        self.assertEqual(ids(r), ["date", "website_link_and_date", "accessibility_email",
+                                  "school_phone", "school_address", "school_name_round",
+                                  "sample_notice", "prior_to_publication",
+                                  "delete_as_appropriate", "examples_only", "please_instruction",
+                                  "method_note", "review_note", "school_bracket"])
+        self.assertEqual(r["groups"], ["revize", "juniper", "school"])
+        self.assertEqual(r["placeholders"][2]["text"], "[Accessibility Email Address]")
+        self.assertEqual(r["placeholders"][4]["text"], "[School Mailing Address]")
+        self.assertEqual(r["placeholders"][13]["text"], "[School Name]")
+        self.assertEqual(r["templates"], ["juniper_school"])
+        self.assertEqual((r["wcag_versions"], r["highest"]), (["2.2"], "2.2"))
+        self.assertEqual(note_ids(r), ["placeholder"])
+        self.assertEqual(r["verdict"], "unfinished template (14 placeholders)")
+
+    def test_fields_that_0_3_0_did_not_know(self):
+        r = c.check_text("Contact us: Email: [Accessibility Email Address]. Phone: "
+                         "[School Phone Number]. We follow WCAG 2.2 AA.")
+        self.assertEqual(ids(r), ["accessibility_email", "school_phone"])
+        self.assertEqual(r["groups"], ["juniper"])
+        self.assertIs(r["placeholder"], True)
+
+    def test_filled_juniper_statement(self):
+        r = c.check_text(JUNIPER_FILLED)
+        self.assertIs(r["placeholder"], False)
+        self.assertEqual(r["templates"], ["juniper_school"])
+        self.assertEqual(r["possible_placeholder"], "")
+        self.assertEqual(r["notes"], [])
+
+    def test_a_bracketed_please_note_is_not_a_placeholder(self):
+        r = c.check_text("[Please note: our offices close at 3pm.] We follow WCAG 2.2 AA.")
+        self.assertIs(r["placeholder"], False)
+        self.assertEqual(r["notes"], [])
+
+    def test_same_rules_as_the_census(self):
+        rules = [(i, p) for g, i, p, _ in c.PLACEHOLDER_RULES if g == "juniper"]
+        self.assertEqual(len(rules), 12)
+        self.assertEqual(rules[0], ("website_link_and_date", r"\[\s*website\s+link\s+and\s+date\s*\]"))
+        self.assertEqual(rules[-1], ("review_note", r"\[\s*it\s+is\s+recommended\s+that\s+statements\b"))
+
+
 class NoteTests(unittest.TestCase):
     def test_possible_placeholder_skips_hidden_email(self):
         r = c.check_text("Questions about the Web Content Accessibility Guidelines 2.1 AA: write "
@@ -302,6 +364,18 @@ class MainTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("PLACEHOLDER gov-uk/website_name: [website name]", out.getvalue())
         self.assertIn("template wording: gov_uk_sample", out.getvalue())
+
+    def test_juniper_html_file(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "statement.html")
+            with open(path, "wb") as f:
+                f.write(page(JUNIPER))
+            out = io.StringIO()
+            code = c.main(["--file", path], out=out)
+        self.assertEqual(code, 1)
+        self.assertIn("PLACEHOLDER juniper/accessibility_email: [Accessibility Email Address]",
+                      out.getvalue())
+        self.assertIn("template wording: juniper_school", out.getvalue())
 
     def test_html_file_json(self):
         with tempfile.TemporaryDirectory() as d:

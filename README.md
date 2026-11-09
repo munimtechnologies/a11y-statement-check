@@ -5,8 +5,9 @@ Is a website's accessibility statement still an unfinished template?
 `statement_template_check.py` reads one accessibility statement (a URL, a saved HTML page or a
 plain-text draft) and reports the placeholders that statement templates leave behind until someone
 fills them in, which WCAG versions the page names, and dated or stock wording worth a second look.
-It knows US vendor templates and, since 0.3.0, the fields and guidance notes of GOV.UK's sample
-accessibility statement for UK public sector websites.
+It knows US vendor templates, the fields and guidance notes of GOV.UK's sample accessibility
+statement for UK public sector websites (since 0.3.0) and the school statement template served on
+UK school websites built by Juniper Websites, formerly e4education (since 0.4.0).
 It is also an **agent skill** (`skills/accessibility-statement-check/SKILL.md`), so coding agents
 such as Claude Code, Codex and Cursor know when to run it and how to read its results, and a
 **GitHub Action** (`action.yml`) that fails a pull request when a statement draft kept in the
@@ -42,8 +43,11 @@ MV2's open censuses of US public websites
 In the UK, public sector bodies must publish an accessibility statement under the Public Sector
 Bodies (Websites and Mobile Applications) (No. 2) Accessibility Regulations 2018, and GOV.UK
 publishes a sample statement to start from. Live statements that still carry its fields
-("[website name]", "[name of organisation]") can be found with a web search; no count of them has
-been published yet.
+("[website name]", "[name of organisation]") can be found with a web search. So can school
+statements built on the Juniper Websites template that still say "Email: [Accessibility Email
+Address]" or "Phone: [School Phone Number]"; a pre-registered count across England's school
+websites is under way
+([uk-schools](https://github.com/munimtechnologies/title2-pdf-census/tree/main/results/uk-schools)).
 
 ## Use it
 
@@ -101,7 +105,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: munimtechnologies/a11y-statement-check@v0.3.1
+      - uses: munimtechnologies/a11y-statement-check@v0.4.0
         with:
           text-files: |
             docs/accessibility*.md
@@ -143,6 +147,7 @@ legal finding, and not to crawl lists of other people's sites.
 | `revize` | [Your Agency/Website Name], [Date], [Contact Email], [Contact Phone], [Agency Address], [X business days] |
 | `accessibility-checker` | [YOUR COMPANY NAME], [SPECIFIC STANDARD, VERSION, LEVEL], [LIST ACCESSIBILITY FEATURES HERE], [LIST ITEMS YOU'RE WORKING TO FIX HERE], [YOUR ACCESSIBILITY EMAIL ADDRESS], [YOUR PHONE NUMBER] |
 | `gov-uk` | GOV.UK's sample statement: [website name], [scope of statement ...], [name of organisation], [email address], [phone number], [add any other contact details], [number], [add link to ...], [insert one of the following ...], [rough timing], [example of non-essential document], [date when it was first published], [date when it was last reviewed], [add name of organisation that carried out test ...], [Note: ...], [Select (a) ...] and the line "sample accessibility statement for a fictional public sector website" (its plain [date] field is reported as `revize/date`) |
+| `juniper` | The Juniper Websites (formerly e4education) school template: [Website Link and Date], [Accessibility Email Address], [School Phone Number], [School Mailing Address], (School Name), and its editing notes "[This is a sample accessibility statement ...", "Prior to publication, please remove this text", "[Delete as appropriate", "[The above are examples only", "[Please add / refer / use / remove ...", "[Set out the method ...", "[It is recommended that statements ..." (its [School Name] is reported as `school/school_bracket` and its [Date] as `revize/date`) |
 | `school` | [Your School] and similar (also [School Name]), "the Your School", yourschool.com-style addresses, 555-555-5555, "within # business days" |
 | `government` | YOUR MUNICIPALITY, "only meant as a template", NAME / TITLE / EMAIL / PHONE, capitalised fields such as [INSERT ...], [CITY NAME] or [NAME OF PARISH/TOWN COUNCIL] |
 | `generic` | [Insert ...] |
@@ -155,12 +160,14 @@ Generator" credit, and a vendor's stock "We work to comply with Section 508 as w
 sentence. A page that uses GOV.UK's legally required compliance sentence ("This website is fully /
 partially / not compliant with the Web Content Accessibility Guidelines ...") gets the UK note
 `uk_older_wcag` when its highest WCAG version is 2.0 or 2.1 (GOV.UK's current sample names WCAG 2.2
-AA), and none of the US ADA notes.
+AA), and none of the US ADA notes. Template wording `juniper_school` marks the Juniper template's
+closing sentence ("... values diversity and inclusion and is committed to providing an accessible
+online experience ..."), filled in or not.
 
 Limits: it reads visible text only (not PDFs, not text split across tags in the middle of a
 word), one page per address, and a filled-in template can still be wrong about the site. The UK
-rules follow the GOV.UK sample as published on 2026-11-08; older copies of the sample used other
-wording that may not be caught.
+rules follow the GOV.UK sample as published on 2026-11-08 and the Juniper template as seen on live
+school pages on 2026-11-09; older copies of either used other wording that may not be caught.
 
 ## Tests
 
@@ -172,6 +179,16 @@ Offline; no network is used.
 
 ## Changes
 
+- **0.4.0:** the `juniper` group: 12 rules for the fields and editing notes of the school
+  statement template served at `/accessibility-statement/` on UK school websites built by Juniper
+  Websites (formerly e4education), such as "[Accessibility Email Address]", "[School Phone
+  Number]", "[Website Link and Date]" and "[This is a sample accessibility statement ...". 0.3.0
+  caught only that template's "[School Name]" and "[Date]", so a statement that kept only its
+  contact fields passed. New template wording `juniper_school`. Every page flagged before is
+  still flagged; a bracket that starts "[Please add", "[Please refer", "[Please use" or
+  "[Please remove" is now reported as `juniper/please_instruction` even outside that template,
+  so a capitalised field such as "[PLEASE ADD NAME OF COUNCIL]" moves from
+  `government/caps_bracket` to it. The Action (`action_run` 0.4.0) is unchanged apart from its version.
 - **0.3.1:** the Action's one-line description in `action.yml` is now shorter than 125 characters,
   which the GitHub Marketplace requires before it lists an action, and a test keeps it that way.
   Only the Action's version changed (`action_run` 0.3.1); the checker and its rules are unchanged

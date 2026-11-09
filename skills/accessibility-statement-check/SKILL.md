@@ -1,6 +1,6 @@
 ---
 name: accessibility-statement-check
-description: Check a website's accessibility statement for unfilled template placeholders (such as [Your School], YOUR MUNICIPALITY, [Your Agency/Website Name], [YOUR COMPANY NAME], accessibility@yourschool.com, 555-555-5555, or GOV.UK sample fields like [website name], [name of organisation] and [date when it was first published]), a WCAG 2.0-only promise and the outdated April 24, 2026 ADA Title II date. Use when writing, reviewing or auditing an accessibility statement or accessibility page, especially for US state and local governments, school districts, UK public sector bodies and sites built on CivicPlus, Revize, Finalsite or the Accessibility Checker WordPress plugin. Read-only; standard-library Python.
+description: Check a website's accessibility statement for unfilled template placeholders (such as [Your School], YOUR MUNICIPALITY, [Your Agency/Website Name], [YOUR COMPANY NAME], accessibility@yourschool.com, 555-555-5555, GOV.UK sample fields like [website name], [name of organisation] and [date when it was first published], or UK school template fields like [Accessibility Email Address], [School Phone Number] and [Website Link and Date]), a WCAG 2.0-only promise and the outdated April 24, 2026 ADA Title II date. Use when writing, reviewing or auditing an accessibility statement or accessibility page, especially for US state and local governments, school districts, UK public sector bodies and schools, and sites built on CivicPlus, Revize, Finalsite, Juniper Websites (e4education) or the Accessibility Checker WordPress plugin. Read-only; standard-library Python.
 license: Apache-2.0
 ---
 
@@ -18,8 +18,9 @@ page.
 
 - The user asks you to write, review, update or audit an accessibility statement or page.
 - You are reviewing a site's ADA Title II readiness, a UK public sector body's statement under the
-  2018 accessibility regulations, or a site built on CivicPlus, Revize, Finalsite or WordPress with
-  the Accessibility Checker plugin.
+  2018 accessibility regulations, a UK school's statement, or a site built on CivicPlus, Revize,
+  Finalsite, Juniper Websites (formerly e4education) or WordPress with the Accessibility Checker
+  plugin.
 - Before you tell anyone a statement is "done" or "compliant".
 
 ## How to run it
@@ -50,10 +51,14 @@ page could be read (404, robots.txt, network error, or less than 200 characters 
 - `PLACEHOLDER <group>/<id>: <text>` is an unfilled template field. Groups: `revize`,
   `accessibility-checker`, `gov-uk` (GOV.UK's sample statement for UK public sector websites: its
   lowercase fields, its "[Note: ...]" and "[Select (a) ...]" guidance and its "fictional public
-  sector website" line), `school` (the 2017 "Your School" template and Finalsite's 2026 sample),
+  sector website" line), `juniper` (the school statement template on UK school websites built by
+  Juniper Websites, formerly e4education: "[Website Link and Date]", "[Accessibility Email
+  Address]", "[School Phone Number]", "[School Mailing Address]", "(School Name)" and its editing
+  notes such as "[This is a sample accessibility statement ..." and "[Delete as appropriate]"),
+  `school` (the 2017 "Your School" template, Finalsite's 2026 sample, and "[School Name]"),
   `government` (the city template's capitalised fields) and `generic` ("[Insert ...]"). Each one
   needs real content: the organisation's name, a working contact, the standard and level the site
-  targets, a review date. The sample's plain "[date]" field is reported as `revize/date`.
+  targets, a review date. A plain "[date]" field is reported as `revize/date`.
 - `NOTE possible_placeholder` is bracketed text that may be a placeholder. Look at it in context;
   it is never counted in the exit code.
 - `NOTE only_wcag_2_0`: the page names WCAG 2.0 and no later version. The ADA Title II rule for
@@ -68,7 +73,8 @@ page could be read (404, robots.txt, network error, or less than 200 characters 
 - `NOTE generator` and `NOTE stock_508` mark wording copied from a template that may no longer be
   true for the site.
 - `template wording` names the template a page is built on, even when it has been filled in
-  (`gov_uk_sample` is the GOV.UK compliance sentence).
+  (`gov_uk_sample` is the GOV.UK compliance sentence; `juniper_school` is the Juniper template's
+  closing sentence about valuing diversity and inclusion).
 
 ## Rules for the agent
 

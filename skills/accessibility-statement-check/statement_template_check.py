@@ -1,4 +1,4 @@
-"""statement_template_check 0.3.0: is a website's accessibility statement still an unfinished template?
+"""statement_template_check 0.4.0: is a website's accessibility statement still an unfinished template?
 
 Reads one accessibility statement (a URL, a saved HTML file or a plain-text file) and reports:
 
@@ -13,6 +13,10 @@ Reads one accessibility statement (a URL, a saved HTML file or a plain-text file
     since 0.3.0 also the fields and guidance notes of GOV.UK's sample accessibility statement for
     UK public sector websites ("[website name]", "[name of organisation]", "[scope of statement
     ...]", "[number]", "[date when it was first published]", "[Note: ...]", "[Select (a) ...]");
+    since 0.4.0 also the fields and editing notes of the school statement template served on
+    UK school websites built by Juniper Websites (formerly e4education): "[Website Link and
+    Date]", "[Accessibility Email Address]", "[School Phone Number]", "[School Mailing Address]",
+    "(School Name)", "[This is a sample accessibility statement ...", "[Delete as appropriate]";
   * which WCAG versions the page names (the ADA Title II rule for state and local governments,
     28 CFR 35.200, adopts WCAG 2.1 Level AA; GOV.UK's sample statement names WCAG 2.2 AA), and
     dated or stock wording worth a second look.
@@ -37,7 +41,7 @@ import urllib.parse
 import urllib.request
 import urllib.robotparser
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 
 UA = ("statement-template-check/%s (MV2, Munim, Inc.; mv2@munimtech.com; reads public pages only)"
       % __version__)
@@ -49,7 +53,8 @@ STOCK_PATHS = (("civicplus", "/153/Accessibility"),
 
 # (group, id, pattern, ignore case). Vendor-specific rules come first: a stretch of text matched
 # by an earlier rule is not counted again by a later, more general one. The GOV.UK sample's
-# "[date]" field is the same text as Revize's "[Date]" and is reported as revize/date.
+# "[date]" field is the same text as Revize's "[Date]" and is reported as revize/date; so is the
+# Juniper template's "[Date]", and its "[School Name]" is reported as school/school_bracket.
 PLACEHOLDER_RULES = (
     ("revize", "agency_name", r"\[\s*your\s+agency\s*/\s*website\s+name\s*\]", True),
     ("revize", "date", r"\[\s*date\s*\]", True),
@@ -89,6 +94,22 @@ PLACEHOLDER_RULES = (
      r"\[\s*add\s+name\s+of\s+(?:the\s+)?organi[sz]ation\s+that\s+carried\s+out\b[^\[\]]{0,80}\]", True),
     ("gov-uk", "guidance_note", r"\[\s*note\s*:[^\[\]]{0,60}", True),
     ("gov-uk", "select_option", r"\[\s*select\s+\([abc]\)[^\[\]]{0,60}", True),
+    # The school statement template served at /accessibility-statement/ on UK school websites built
+    # by Juniper Websites (formerly e4education), read on live pages on 2026-11-09. The same rules
+    # as JUNIPER_FIELD_RULES in title2-pdf-census's school_stock.py 0.1.0.
+    ("juniper", "website_link_and_date", r"\[\s*website\s+link\s+and\s+date\s*\]", True),
+    ("juniper", "accessibility_email", r"\[\s*accessibility\s+email\s+address\s*\]", True),
+    ("juniper", "school_phone", r"\[\s*school\s+phone\s+number\s*\]", True),
+    ("juniper", "school_address", r"\[\s*school\s+(?:mailing\s+)?address\s*\]", True),
+    ("juniper", "school_name_round", r"\(\s*school\s+name\s*\)", True),
+    ("juniper", "sample_notice", r"\[\s*this\s+is\s+a\s+sample\s+accessibility\s+statement\b", True),
+    ("juniper", "prior_to_publication",
+     r"\bprior\s+to\s+publication\s*,?\s+please\s+remove\s+this\s+text\b", True),
+    ("juniper", "delete_as_appropriate", r"\[\s*delete\s+as\s+appropriate\b", True),
+    ("juniper", "examples_only", r"\[\s*the\s+above\s+are\s+examples\s+only\b", True),
+    ("juniper", "please_instruction", r"\[\s*please\s+(?:add|refer|use|remove)\b", True),
+    ("juniper", "method_note", r"\[\s*set\s+out\s+the\s+method\b", True),
+    ("juniper", "review_note", r"\[\s*it\s+is\s+recommended\s+that\s+statements\b", True),
     ("school", "school_bracket",
      r"\[\s*(?:(?:your|the|insert|name\s+of(?:\s+the)?)\s+)?(?:school|district|school\s+district|"
      r"organi[sz]ation|campus)(?:\s+(?:name|district|website|url))?\s*\]", True),
@@ -107,7 +128,7 @@ PLACEHOLDER_RULES = (
     ("generic", "insert_bracket", r"\[\s*insert\b[^\[\]]{0,60}\]", True),
 )
 PLACEHOLDER_RES = tuple((g, i, re.compile(p, re.I if ic else 0)) for g, i, p, ic in PLACEHOLDER_RULES)
-GROUPS = ("revize", "accessibility-checker", "gov-uk", "school", "government", "generic")
+GROUPS = ("revize", "accessibility-checker", "gov-uk", "juniper", "school", "government", "generic")
 
 # Bracketed text that may be a placeholder (reported as "possible", never counted). Cloudflare's
 # "[email protected]" (an email address hidden from scrapers) is not one.
@@ -118,7 +139,9 @@ EMAIL_PROTECTED_RE = re.compile(r"\[\s*email\s+protected\s*\]", re.I)
 
 # Template wording, filled in or not (described only). gov_uk_sample is the compliance sentence
 # that UK public sector bodies must keep unchanged ("This website is partially compliant with the
-# Web Content Accessibility Guidelines version 2.2 AA standard ...").
+# Web Content Accessibility Guidelines version 2.2 AA standard ..."); juniper_school is the closing
+# sentence of the Juniper Websites school template ("... values diversity and inclusion and is
+# committed to providing an accessible online experience ...").
 TEMPLATE_RULES = (
     ("t2017_your_school", r"a\s+positive\s+place\s+for\s+everyone"),
     ("finalsite_2026", r"\bbuilt\s+with\s+WCAG\s+2\.1\s+AA\s+guidelines\s+in\s+mind\b"),
@@ -128,6 +151,8 @@ TEMPLATE_RULES = (
     ("stock_508", r"We work to comply with Section 508 as well as"),
     ("gov_uk_sample", r"\bThis\s+(?:website|app|application)\s+is\s+(?:fully|partially|not)\s+compliant\s+"
                       r"with\s+the\s+Web\s+Content\s+Accessibility\s+Guidelines\b"),
+    ("juniper_school", r"values\s+diversity\s+and\s+inclusion\s+and\s+is\s+committed\s+to\s+"
+                       r"providing\s+an\s+accessible\s+online\s+experience"),
 )
 TEMPLATE_RES = tuple((t, re.compile(p, re.I)) for t, p in TEMPLATE_RULES)
 
