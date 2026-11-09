@@ -163,6 +163,7 @@ class ActionRunTests(Repo):
         with open(os.path.join(self.dir, "report.json"), encoding="utf-8") as f:
             data = json.load(f)
         self.assertEqual(data["version"], a.__version__)
+        self.assertEqual(data["checker_version"], a.stc.__version__)
         self.assertEqual(data["results"][0]["source"], "docs/draft.md")
         self.assertEqual(len(data["results"][0]["placeholders"]), 3)
 
@@ -231,13 +232,27 @@ class ActionFileTests(unittest.TestCase):
         self.assertIn("Apache-2.0", self.text)
         self.assertNotIn("\t", self.text)
 
+    def test_marketplace_description_is_short_enough(self):
+        # The GitHub Marketplace refuses an action whose description is 125 characters or longer
+        # ("Description must be less than 125 characters", seen on 2026-11-08 for v0.2.0/v0.3.0).
+        top = [line for line in self.lines if line.startswith("description:")]
+        self.assertEqual(len(top), 1)
+        value = top[0][len("description:"):].strip()
+        self.assertTrue(value)
+        self.assertLess(len(value), 125)
+        self.assertFalse(value.startswith(("[", "{", "'", '"', "*", "&", "!", "|", ">", "%", "@")))
+        self.assertNotIn(": ", value)
+        self.assertNotIn(" #", value)
+
     def test_readme_documents_every_input(self):
         with open(os.path.join(HERE, "README.md"), encoding="utf-8") as f:
             readme = f.read()
         for name in self.section("inputs") + self.section("outputs"):
             self.assertIn("`%s`" % name, readme)
         self.assertIn("uses: munimtechnologies/a11y-statement-check@v%s" % a.__version__, readme)
-        self.assertEqual(a.__version__, a.stc.__version__)
+        # The Action's patch releases may leave the checker unchanged; major.minor must agree.
+        self.assertEqual(a.__version__.split(".")[:2], a.stc.__version__.split(".")[:2])
+        self.assertIn("- **%s:**" % a.__version__, readme)
 
 
 if __name__ == "__main__":

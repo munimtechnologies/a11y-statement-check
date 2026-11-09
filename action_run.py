@@ -1,5 +1,5 @@
 # Copyright 2026 Munim, Inc. Licensed under the Apache License, Version 2.0 (Apache-2.0).
-"""action_run 0.3.0: the GitHub Action entry point of a11y-statement-check.
+"""action_run 0.3.1: the GitHub Action entry point of a11y-statement-check.
 
 Checks accessibility statement drafts kept in a repository (plain text or Markdown, saved HTML)
 and, if asked, published statement URLs, with statement_template_check.py's rules (since 0.3.0
@@ -27,7 +27,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "skills", "accessibility-statement-check"))
 import statement_template_check as stc  # noqa: E402
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 TRUE = ("true", "yes", "on", "1")
 TITLE = "Accessibility statement placeholder"
 

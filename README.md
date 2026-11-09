@@ -101,7 +101,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: munimtechnologies/a11y-statement-check@v0.3.0
+      - uses: munimtechnologies/a11y-statement-check@v0.3.1
         with:
           text-files: |
             docs/accessibility*.md
@@ -172,6 +172,10 @@ Offline; no network is used.
 
 ## Changes
 
+- **0.3.1:** the Action's one-line description in `action.yml` is now shorter than 125 characters,
+  which the GitHub Marketplace requires before it lists an action, and a test keeps it that way.
+  Only the Action's version changed (`action_run` 0.3.1); the checker and its rules are unchanged
+  (still 0.3.0), so every result is the same as in 0.3.0.
 - **0.3.0:** the `gov-uk` group (GOV.UK's sample accessibility statement: 17 rules for its fields,
   guidance notes and sample line), the `gov_uk_sample` template wording and the `uk_older_wcag` note; UK
   statements no longer get the US ADA notes. Nothing found before is reported differently, except

@@ -1,7 +1,7 @@
 # Copyright 2026 Munim, Inc. Licensed under the Apache License, Version 2.0 (Apache-2.0).
 # Made by MV2 of Munim, Inc. with AI agents.
 name: Accessibility statement template check
-description: Fail a pull request when an accessibility statement draft still carries vendor template placeholders such as "the Your School website" or [Your Agency/Website Name].
+description: Fail a pull request while an accessibility statement draft still has template placeholders like [website name].
 author: MV2 of Munim, Inc.
 branding:
   icon: check-square
