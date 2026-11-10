@@ -31,6 +31,9 @@ HTML = ("<!doctype html><html><head><title>Accessibility</title><script>var x = 
 UK = ("# Accessibility statement for [website name]\n\n"
       "This website is run by Example Council.\n"
       "Contact us on [phone number].\n" + FILLER + "\n")
+OLD = ("# Accessibility statement\n\nThe Town of Example is committed to accessibility.\n"
+       "This statement was prepared on 1 March 2021. It was last reviewed on 10 March 2025.\n"
+       + FILLER + "\n")
 
 
 def fake_get(pages):
@@ -88,10 +91,12 @@ class ActionRunTests(Repo):
         self.assertEqual(log.count("::error "), 3)
         self.assertIn("1 of 2 statements read with a template placeholder; 0 not read", log)
         self.assertEqual(self.outputs_dict(),
-                         {"placeholder-pages": "1", "pages-read": "2", "unread": "0"})
+                         {"placeholder-pages": "1", "pages-read": "2", "unread": "0",
+                          "old-statements": "0"})
         summary = self.read(self.summary)
         self.assertIn("| docs/draft.md | unfinished template (3 placeholders) |", summary)
-        self.assertIn("| docs/clean.md | no template placeholder found | none | 2.1 |", summary)
+        self.assertIn("| docs/clean.md | no template placeholder found | none | 2.1 | none found |",
+                      summary)
         self.assertIn("not legal advice", summary)
 
     def test_uk_draft(self):
@@ -109,6 +114,39 @@ class ActionRunTests(Repo):
         self.assertEqual(code, 0)
         self.assertNotIn("::error", log)
         self.assertEqual(self.outputs_dict()["placeholder-pages"], "0")
+
+    def test_old_statement_date_is_a_notice_and_an_output(self):
+        self.write("docs/old.md", OLD)
+        code, log = self.run_action(text_files="docs/old.md", today="2026-11-10")
+        self.assertEqual(code, 0)
+        self.assertNotIn("::error", log)
+        self.assertNotIn("::warning", log)
+        self.assertIn("::notice file=docs/old.md,title=Accessibility statement%3A old_statement_date::"
+                      "the statement's latest date (reviewed 2025-03-10) is 610 days before 2026-11-10",
+                      log)
+        self.assertIn("1 dated more than 365 days before 2026-11-10", log)
+        self.assertEqual(self.outputs_dict(),
+                         {"placeholder-pages": "0", "pages-read": "1", "unread": "0",
+                          "old-statements": "1"})
+        self.assertIn("| docs/old.md | no template placeholder found | none | 2.1 | "
+                      "2025-03-10 (reviewed), 610 days old |", self.read(self.summary))
+
+    def test_max_age_days(self):
+        self.write("docs/old.md", OLD)
+        code, log = self.run_action(text_files="docs/old.md", today="2026-11-10", max_age_days="0")
+        self.assertEqual(code, 0)
+        self.assertNotIn("old_statement_date", log)
+        self.assertEqual(self.outputs_dict()["old-statements"], "0")
+        os.remove(self.outputs)
+        code, log = self.run_action(text_files="docs/old.md", today="2026-11-10",
+                                    max_age_days="1000")
+        self.assertEqual(self.outputs_dict()["old-statements"], "0")
+        os.remove(self.outputs)
+        code, log = self.run_action(text_files="docs/old.md", today="2026-11-10",
+                                    max_age_days="a year")
+        self.assertIn("::warning title=a11y-statement-check::max-age-days 'a year' is not a whole "
+                      "number; using 365", log)
+        self.assertEqual(self.outputs_dict()["old-statements"], "1")
 
     def test_warning_only(self):
         code, log = self.run_action(text_files="docs/draft.md", fail_on_placeholder="false")
@@ -150,7 +188,8 @@ class ActionRunTests(Repo):
         self.assertIn("::error title=Accessibility statement placeholder::"
                       "https://example.org/accessibility: '[YOUR COMPANY NAME]'", log)
         self.assertIn("https://example.org/gone not read: http_404", log)
-        self.assertEqual(self.outputs_dict(), {"placeholder-pages": "1", "pages-read": "1", "unread": "1"})
+        self.assertEqual(self.outputs_dict(), {"placeholder-pages": "1", "pages-read": "1", "unread": "1",
+                                               "old-statements": "0"})
 
     def test_nothing_given(self):
         code, log = self.run_action(text_files="\n# just a comment\n")
@@ -166,6 +205,7 @@ class ActionRunTests(Repo):
         self.assertEqual(data["checker_version"], a.stc.__version__)
         self.assertEqual(data["results"][0]["source"], "docs/draft.md")
         self.assertEqual(len(data["results"][0]["placeholders"]), 3)
+        self.assertEqual(data["max_age_days"], 365)
 
     def test_escaping(self):
         self.assertEqual(a.esc_data("50%\r\nx"), "50%25%0D%0Ax")
@@ -179,6 +219,9 @@ class ActionRunTests(Repo):
         self.assertTrue(a.flag("", True))
         self.assertFalse(a.flag("False", True))
         self.assertTrue(a.flag("YES", False))
+        self.assertEqual(a.whole_number(" 30 ", 365), (30, ""))
+        self.assertEqual(a.whole_number("", 365), (365, ""))
+        self.assertEqual(a.whole_number("x", 365)[0], 365)
 
 
 class ActionFileTests(unittest.TestCase):
@@ -207,7 +250,7 @@ class ActionFileTests(unittest.TestCase):
     def test_inputs_reach_the_script_only_through_env(self):
         inputs = self.section("inputs")
         self.assertEqual(inputs, ["text-files", "html-files", "urls", "fail-on-placeholder",
-                                  "fail-on-unread", "json-report"])
+                                  "fail-on-unread", "json-report", "max-age-days"])
         used = re.findall(r"\$\{\{ inputs\.([a-z-]+) \}\}", self.text)
         self.assertEqual(sorted(used), sorted(inputs))
         for name in inputs:
@@ -219,7 +262,7 @@ class ActionFileTests(unittest.TestCase):
 
     def test_outputs_match_what_the_script_writes(self):
         outputs = self.section("outputs")
-        self.assertEqual(outputs, ["placeholder-pages", "pages-read", "unread"])
+        self.assertEqual(outputs, ["placeholder-pages", "pages-read", "unread", "old-statements"])
         with open(a.__file__, encoding="utf-8") as f:
             source = f.read()
         for name in outputs:

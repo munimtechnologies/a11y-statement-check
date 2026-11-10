@@ -1,4 +1,4 @@
-"""statement_template_check 0.4.0: is a website's accessibility statement still an unfinished template?
+"""statement_template_check 0.5.0: is a website's accessibility statement still an unfinished template?
 
 Reads one accessibility statement (a URL, a saved HTML file or a plain-text file) and reports:
 
@@ -19,7 +19,13 @@ Reads one accessibility statement (a URL, a saved HTML file or a plain-text file
     "(School Name)", "[This is a sample accessibility statement ...", "[Delete as appropriate]";
   * which WCAG versions the page names (the ADA Title II rule for state and local governments,
     28 CFR 35.200, adopts WCAG 2.1 Level AA; GOV.UK's sample statement names WCAG 2.2 AA), and
-    dated or stock wording worth a second look.
+    dated or stock wording worth a second look;
+  * since 0.5.0, the statement's own latest "last reviewed / updated" and "prepared / published
+    on" dates, with a note when the later of them is more than --max-age-days (default 365) old:
+    GOV.UK's sample statement asks public sector bodies to review their statement at least once a
+    year, and MV2's census of UK council statements (November 2026) found 105 of 271 dated ones
+    carrying a date more than a year old. The date reader is the one of title2-pdf-census's
+    council_stock.py 0.1.0.
 
 With --site it asks a site for the three stock addresses where those censuses found most
 unfinished templates (/153/Accessibility, /accessibility_statement/index.php and
@@ -27,10 +33,13 @@ unfinished templates (/153/Accessibility, /accessibility_statement/index.php and
 
 It reads what a statement says, not whether the website is accessible, and it is not legal
 advice. Exit code: 1 if any page read has a template placeholder, 0 if none does, 2 if no page
-could be read. Standard library only. Apache-2.0. Made by MV2 of Munim, Inc. with AI agents.
+could be read (an old date is a note only and never changes the exit code). Standard library
+only. Apache-2.0. Made by MV2 of Munim, Inc. with AI agents.
 """
 
 import argparse
+import calendar
+import datetime
 import html.parser
 import json
 import re
@@ -41,12 +50,13 @@ import urllib.parse
 import urllib.request
 import urllib.robotparser
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 UA = ("statement-template-check/%s (MV2, Munim, Inc.; mv2@munimtech.com; reads public pages only)"
       % __version__)
 MIN_TEXT = 200
 MAX_BYTES = 3_000_000
+MAX_AGE_DAYS = 365
 STOCK_PATHS = (("civicplus", "/153/Accessibility"),
                ("revize", "/accessibility_statement/index.php"),
                ("accessibility-statement", "/accessibility-statement"))
@@ -170,6 +180,27 @@ DATE_2028_RE = re.compile(r"\bApr(?:il|\.)?\s+26(?:th)?,?\s+2028\b|\b26\s+April,
                           r"\b0?4/26/(?:20)?28\b|\b2028-04-26\b", re.I)
 GENERATOR_RE = re.compile(r"\bAccessibility\s+Statement\s+Generator\b", re.I)
 
+# The statement's own dates (since 0.5.0; the reader of title2-pdf-census's council_stock.py
+# 0.1.0, with a wider range of years). "3 June 2024", "June 3, 2024", "June 2024" (read as the
+# month's last day), "03/06/2024" (day first, as in the UK, unless the second number is above
+# 12) and "2024-06-03" are read after "last reviewed / updated / revised", "reviewed / updated /
+# revised on / in" or "prepared / published / created / written / produced on / in".
+MON = (r"(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|"
+       r"sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?")
+YEAR = r"(?:19|20)\d\d"
+DATE = (r"(?:\b(?P<d1>\d{1,2})(?:st|nd|rd|th)?\s+(?:of\s+)?(?P<m1>" + MON + r")\s*,?\s*(?P<y1>" + YEAR
+        + r")\b|\b(?P<m2>" + MON + r")\s+(?P<d2>\d{1,2})(?:st|nd|rd|th)?\s*,?\s*(?P<y2>" + YEAR
+        + r")\b|\b(?P<m3>" + MON + r")\s*,?\s*(?P<y3>" + YEAR
+        + r")\b|\b(?P<d4>\d{1,2})[/.](?P<m4>\d{1,2})[/.](?P<y4>" + YEAR
+        + r")\b|\b(?P<y5>" + YEAR + r")-(?P<m5>\d{1,2})-(?P<d5>\d{1,2})\b)")
+REVIEW_RE = re.compile(r"\b(?:last\s+(?:reviewed|updated|revised|review)|(?:reviewed|updated|revised)"
+                       r"\s+(?:on|in))\b[^.\d]{0,30}?" + DATE, re.I)
+PREPARED_RE = re.compile(r"\b(?:prepared|published|created|written|produced)\s+(?:on|in)\b"
+                         r"[^.\d]{0,30}?" + DATE, re.I)
+MONTHS = {m: i for i, m in enumerate(("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug",
+                                      "sep", "oct", "nov", "dec"), 1)}
+DATE_YEARS = (2000, 2099)  # dates outside these years are not read as statement dates
+
 NOTES = {
     "placeholder": "template placeholders are still in the text: fill them in (name, contact, "
                    "standard, dates) or remove them",
@@ -188,13 +219,63 @@ NOTES = {
     "generator": "keeps the 'Accessibility Statement Generator' credit line of a 2017 template",
     "stock_508": "keeps a vendor's stock sentence 'We work to comply with Section 508 as well "
                  "as ...'",
+    "old_statement_date": "the statement's latest date (%s %s) is %d days before %s; GOV.UK's "
+                          "sample statement asks public sector bodies to review their statement "
+                          "at least once a year, so check that it is still current",
 }
+
+
+# ---------------------------------------------------------------- statement dates
+
+def _date(m):
+    """A datetime.date from one DATE match (a month without a day reads as its last day), or None."""
+    g = m.groupdict()
+    try:
+        if g["y1"]:
+            y, mo, d = int(g["y1"]), MONTHS[g["m1"].lower().rstrip(".")[:3]], int(g["d1"])
+        elif g["y2"]:
+            y, mo, d = int(g["y2"]), MONTHS[g["m2"].lower().rstrip(".")[:3]], int(g["d2"])
+        elif g["y3"]:
+            y, mo = int(g["y3"]), MONTHS[g["m3"].lower().rstrip(".")[:3]]
+            d = calendar.monthrange(y, mo)[1]
+        elif g["y4"]:
+            y, mo, d = int(g["y4"]), int(g["m4"]), int(g["d4"])
+            if mo > 12 and d <= 12:  # month/day/year
+                mo, d = d, mo
+        else:
+            y, mo, d = int(g["y5"]), int(g["m5"]), int(g["d5"])
+        if not DATE_YEARS[0] <= y <= DATE_YEARS[1]:
+            return None
+        return datetime.date(y, mo, d)
+    except (KeyError, ValueError):
+        return None
+
+
+def statement_dates(text):
+    """(review_date, prepared_date, statement_date, source) as ISO strings ('' when none): the
+    latest 'last reviewed / updated' date, the latest 'prepared / published on' date, and the
+    later of the two ('reviewed' or 'prepared')."""
+    flat = " ".join(text.split())
+    reviews = [d for d in (_date(m) for m in REVIEW_RE.finditer(flat)) if d]
+    prepared = [d for d in (_date(m) for m in PREPARED_RE.finditer(flat)) if d]
+    r = max(reviews) if reviews else None
+    p = max(prepared) if prepared else None
+    if r and (not p or r >= p):
+        s, src = r, "reviewed"
+    elif p:
+        s, src = p, "prepared"
+    else:
+        s, src = None, ""
+    iso = lambda d: d.isoformat() if d else ""  # noqa: E731
+    return iso(r), iso(p), iso(s), src
 
 
 # ---------------------------------------------------------------- reading text
 
-def check_text(text):
-    """What one statement's visible text says (see the module docstring)."""
+def check_text(text, today=None, max_age_days=MAX_AGE_DAYS):
+    """What one statement's visible text says (see the module docstring). With today (a
+    datetime.date), a statement whose latest date is more than max_age_days before it gets the
+    note old_statement_date (max_age_days 0 or less turns that note off)."""
     text = " ".join(text.replace("\xa0", " ").split())
     found, spans = [], []
     for group, rid, rx in PLACEHOLDER_RES:
@@ -219,6 +300,10 @@ def check_text(text):
     dates = {"2026-04-24": bool(DATE_2026_RE.search(text)),
              "2027-04-26": bool(DATE_2027_RE.search(text)),
              "2028-04-26": bool(DATE_2028_RE.search(text))}
+    review, prepared, stated, source = statement_dates(text)
+    age = None
+    if today is not None and stated:
+        age = (today - datetime.date.fromisoformat(stated)).days
     notes = []
 
     def note(key, *args):
@@ -243,11 +328,15 @@ def check_text(text):
         note("generator")
     if "stock_508" in templates:
         note("stock_508")
+    if age is not None and max_age_days > 0 and age > max_age_days:
+        note("old_statement_date", source, stated, age, today.isoformat())
     return {"placeholder": bool(found), "placeholders": found,
             "groups": [g for g in GROUPS if any(p["group"] == g for p in found)],
             "possible_placeholder": possible, "templates": templates,
             "wcag_named": wcag_named, "wcag_versions": sorted(versions),
             "highest": highest, "dates": dates,
+            "review_date": review, "prepared_date": prepared, "statement_date": stated,
+            "date_source": source, "statement_age_days": age,
             "notes": notes, "text_chars": len(text),
             "verdict": ("unfinished template (%d placeholder%s)"
                         % (len(found), "" if len(found) == 1 else "s")) if found
@@ -335,7 +424,7 @@ def robots_checker(get):
     return allowed
 
 
-def read_page(url, get=http_get, allowed=None, stock=""):
+def read_page(url, get=http_get, allowed=None, stock="", today=None, max_age_days=MAX_AGE_DAYS):
     """Read one page and check it. stock: the stock address's name when the address was not given
     by the user (a redirect from it to the home page is then not read as a statement)."""
     out = {"source": url, "final_url": "", "status": "", "stock_address": stock}
@@ -358,7 +447,7 @@ def read_page(url, get=http_get, allowed=None, stock=""):
         out.update(status="short", text_chars=len(text))
         return out
     out["status"] = "ok"
-    out.update(check_text(text))
+    out.update(check_text(text, today=today, max_age_days=max_age_days))
     return out
 
 
@@ -370,7 +459,8 @@ def site_base(site):
     return "%s://%s" % (p.scheme.lower(), p.netloc.lower())
 
 
-def check_site(site, get=http_get, sleep=time.sleep, delay=1.0):
+def check_site(site, get=http_get, sleep=time.sleep, delay=1.0, today=None,
+               max_age_days=MAX_AGE_DAYS):
     """The three stock addresses of one site, robots.txt honoured, one request at a time."""
     allowed = robots_checker(get)
     base = site_base(site)
@@ -378,17 +468,18 @@ def check_site(site, get=http_get, sleep=time.sleep, delay=1.0):
     for i, (name, path) in enumerate(STOCK_PATHS):
         if i:
             sleep(delay)
-        pages.append(read_page(base + path, get=get, allowed=allowed, stock=name))
+        pages.append(read_page(base + path, get=get, allowed=allowed, stock=name, today=today,
+                               max_age_days=max_age_days))
     return pages
 
 
-def check_file(path, html_file=True):
+def check_file(path, html_file=True, today=None, max_age_days=MAX_AGE_DAYS):
     """A saved HTML page (html_file) or a plain-text statement on disk."""
     with open(path, "rb") as f:
         body = f.read()
     text = visible_text(body) if html_file else body.decode("utf-8", "replace")
     out = {"source": path, "final_url": "", "status": "ok", "stock_address": ""}
-    out.update(check_text(text))
+    out.update(check_text(text, today=today, max_age_days=max_age_days))
     return out
 
 
@@ -406,6 +497,10 @@ def format_result(r):
     if r["templates"]:
         lines.append("  template wording: %s" % ", ".join(r["templates"]))
     lines.append("  WCAG versions named: %s" % ("+".join(r["wcag_versions"]) or "none"))
+    if r.get("statement_date"):
+        lines.append("  statement date: %s (%s)" % (r["statement_date"], r["date_source"]))
+    else:
+        lines.append("  statement date: none found")
     for n in r["notes"]:
         lines.append("  NOTE %s: %s" % (n["id"], n["message"]))
     lines.append("  verdict: %s" % r["verdict"])
@@ -430,6 +525,12 @@ def build_parser():
     parser.add_argument("--json", action="store_true", help="print JSON instead of text")
     parser.add_argument("--delay", type=float, default=1.0,
                         help="seconds between requests to one site (default 1)")
+    parser.add_argument("--max-age-days", type=int, default=MAX_AGE_DAYS,
+                        help="note a statement whose latest 'last reviewed' or 'prepared on' date "
+                             "is more than this many days old (default 365; 0 turns it off)")
+    parser.add_argument("--today", type=datetime.date.fromisoformat, default=None,
+                        help="the date to measure a statement's age from, as YYYY-MM-DD "
+                             "(default: today)")
     parser.add_argument("--version", action="version", version=__version__)
     return parser
 
@@ -440,18 +541,21 @@ def main(argv=None, get=http_get, sleep=time.sleep, out=None):
     if not (args.urls or args.site or args.file or args.text):
         build_parser().print_usage(out)
         return 2
+    today = args.today or datetime.date.today()
+    age = {"today": today, "max_age_days": args.max_age_days}
     results = []
     for url in args.urls:
-        results.append(read_page(url, get=get))
+        results.append(read_page(url, get=get, **age))
     for site in args.site:
-        results.extend(check_site(site, get=get, sleep=sleep, delay=args.delay))
+        results.extend(check_site(site, get=get, sleep=sleep, delay=args.delay, **age))
     for path in args.file:
-        results.append(check_file(path, html_file=True))
+        results.append(check_file(path, html_file=True, **age))
     for path in args.text:
-        results.append(check_file(path, html_file=False))
+        results.append(check_file(path, html_file=False, **age))
     code = exit_code(results)
     if args.json:
-        json.dump({"version": __version__, "exit_code": code, "results": results}, out, indent=1)
+        json.dump({"version": __version__, "exit_code": code, "today": today.isoformat(),
+                   "max_age_days": args.max_age_days, "results": results}, out, indent=1)
         out.write("\n")
     else:
         for r in results:

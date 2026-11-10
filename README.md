@@ -1,24 +1,26 @@
 # a11y-statement-check
 
-Is a website's accessibility statement still an unfinished template?
+Is a website's accessibility statement still an unfinished template, and when was it last reviewed?
 
 `statement_template_check.py` reads one accessibility statement (a URL, a saved HTML page or a
 plain-text draft) and reports the placeholders that statement templates leave behind until someone
-fills them in, which WCAG versions the page names, and dated or stock wording worth a second look.
+fills them in, which WCAG versions the page names, the statement's own latest "last reviewed" or
+"prepared on" date (since 0.5.0, with a note when it is more than a year old), and dated or stock
+wording worth a second look.
 It knows US vendor templates, the fields and guidance notes of GOV.UK's sample accessibility
 statement for UK public sector websites (since 0.3.0) and the school statement template served on
 UK school websites built by Juniper Websites, formerly e4education (since 0.4.0).
 It is also an **agent skill** (`skills/accessibility-statement-check/SKILL.md`), so coding agents
 such as Claude Code, Codex and Cursor know when to run it and how to read its results, and a
 **GitHub Action** (`action.yml`) that fails a pull request when a statement draft kept in the
-repository still has a placeholder.
+repository still has a placeholder, and can check a published statement on a schedule.
 
 Made by MV2 of Munim, Inc. with AI agents; not yet checked by a person. Apache-2.0. It reads what
 a statement says, not whether a website is accessible, and it is not legal advice.
 
 ## Why
 
-MV2's open censuses of US public websites
+MV2's open censuses of public websites
 ([title2-pdf-census](https://github.com/munimtechnologies/title2-pdf-census)) found:
 
 - **1,067 of 11,581** US public school district website hosts (9.21%) serve an accessibility
@@ -42,12 +44,21 @@ MV2's open censuses of US public websites
 
 In the UK, public sector bodies must publish an accessibility statement under the Public Sector
 Bodies (Websites and Mobile Applications) (No. 2) Accessibility Regulations 2018, and GOV.UK
-publishes a sample statement to start from. Live statements that still carry its fields
-("[website name]", "[name of organisation]") can be found with a web search. So can school
-statements built on the Juniper Websites template that still say "Email: [Accessibility Email
-Address]" or "Phone: [School Phone Number]"; a pre-registered count across England's school
-websites is under way
-([uk-schools](https://github.com/munimtechnologies/title2-pdf-census/tree/main/results/uk-schools)).
+publishes a sample statement to start from, which asks for a review at least once a year. The
+same censuses found:
+
+- **667 of 23,802** school website hosts in England (2.80%) serve a statement at
+  `/accessibility-statement/` that still carries template placeholders, such as GOV.UK's sample
+  fields "[email address]" and "[phone number]" or the Juniper Websites template's "[Accessibility
+  Email Address]"
+  ([uk-schools](https://github.com/munimtechnologies/title2-pdf-census/tree/main/results/uk-schools),
+  a pre-registered study).
+- Of the statements of the UK's principal councils that its reader found (284 of 379 website
+  hosts), **105 of the 271 dated ones (38.75%)** carry a latest date more than a year before the
+  census month (November 2026), and 86 of the 284 name WCAG 2.1 rather than 2.2 as the highest
+  version; only one keeps a template field
+  ([uk-councils](https://github.com/munimtechnologies/title2-pdf-census/tree/main/results/uk-councils),
+  a pre-registered study). A date is what a statement says; that study calls no council in breach.
 
 ## Use it
 
@@ -57,13 +68,16 @@ Python 3.8 or newer, standard library only, nothing to install:
 python skills/accessibility-statement-check/statement_template_check.py https://www.example.gov/accessibility
 python skills/accessibility-statement-check/statement_template_check.py --site www.example.gov
 python skills/accessibility-statement-check/statement_template_check.py --text draft-statement.txt --json
+python skills/accessibility-statement-check/statement_template_check.py --text draft-statement.txt --max-age-days 180 --today 2026-11-10
 ```
 
 `--site` tries the three stock addresses (`/153/Accessibility`,
 `/accessibility_statement/index.php`, `/accessibility-statement`), honours robots.txt and pauses
-one second between requests. `--file` reads a saved HTML page. Exit code 1: a template placeholder
-was found; 0: none found; 2: no page could be read. That makes it usable in CI on a statement draft
-kept in a repository.
+one second between requests. `--file` reads a saved HTML page. `--max-age-days` (default 365; 0
+turns it off) sets when a statement's latest date counts as old, and `--today` (YYYY-MM-DD) fixes
+the date it is measured from. Exit code 1: a template placeholder was found; 0: none found; 2: no
+page could be read. An old date is a note only and never changes the exit code. That makes it
+usable in CI on a statement draft kept in a repository.
 
 Example output for an unfinished template (an illustrative page, not a real site):
 
@@ -72,24 +86,24 @@ https://www.example.gov/153/Accessibility
   read: 1874 characters of text (stock address: civicplus)
   PLACEHOLDER government/your_municipality: YOUR MUNICIPALITY
   WCAG versions named: 2.0
+  statement date: none found
   NOTE placeholder: template placeholders are still in the text: fill them in (name, contact, standard, dates) or remove them
   NOTE only_wcag_2_0: names WCAG 2.0 only; the ADA Title II rule (28 CFR 35.200) adopts WCAG 2.1 Level AA, so check which version the site actually targets
   verdict: unfinished template (1 placeholder)
 ```
 
-And for a UK draft that kept GOV.UK's sample fields (an illustrative text file):
+And for a filled-in UK statement last reviewed more than a year ago (an illustrative text file,
+checked on 2026-11-10):
 
 ```
-draft-statement.txt
-  read: 812 characters of text
-  PLACEHOLDER gov-uk/website_name: [website name]
-  PLACEHOLDER gov-uk/organisation_name: [name of organisation]
-  PLACEHOLDER gov-uk/first_published: [date when it was first published]
+statement.txt
+  read: 1240 characters of text
   template wording: gov_uk_sample
   WCAG versions named: 2.1
-  NOTE placeholder: template placeholders are still in the text: fill them in (name, contact, standard, dates) or remove them
+  statement date: 2025-03-10 (reviewed)
   NOTE uk_older_wcag: uses GOV.UK's compliance wording but names WCAG 2.1 as the highest version; GOV.UK's current sample statement names WCAG 2.2 AA, so check which version the site was tested against
-  verdict: unfinished template (3 placeholders)
+  NOTE old_statement_date: the statement's latest date (reviewed 2025-03-10) is 610 days before 2026-11-10; GOV.UK's sample statement asks public sector bodies to review their statement at least once a year, so check that it is still current
+  verdict: no template placeholder found
 ```
 
 ## In CI (GitHub Action, since v0.2.0)
@@ -105,12 +119,32 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: munimtechnologies/a11y-statement-check@v0.4.0
+      - uses: munimtechnologies/a11y-statement-check@v0.5.0
         with:
           text-files: |
             docs/accessibility*.md
           html-files: |
             site/accessibility/index.html
+```
+
+Or check your published statement once a month and get a notice when its latest stated review
+date is more than a year old (one request to your own page per run):
+
+```yaml
+name: statement review date
+on:
+  schedule:
+    - cron: "0 7 1 * *"
+jobs:
+  statement:
+    runs-on: ubuntu-latest
+    steps:
+      - id: statement
+        uses: munimtechnologies/a11y-statement-check@v0.5.0
+        with:
+          urls: https://www.example.gov.uk/accessibility-statement
+      - if: steps.statement.outputs.old-statements != '0'
+        run: echo "The accessibility statement is due for its yearly review." && exit 1
 ```
 
 Inputs (all optional, but give at least one of the first three):
@@ -123,14 +157,16 @@ Inputs (all optional, but give at least one of the first three):
 | `fail-on-placeholder` | `true` (default) fails the step on a placeholder; `false` reports it as a warning |
 | `fail-on-unread` | `true` (default) fails the step when a pattern matches no file or a URL cannot be read |
 | `json-report` | A path to write the full JSON report to (for example to upload as an artifact) |
+| `max-age-days` | A statement whose latest stated date is older than this gets a notice and counts in `old-statements` (default 365; 0 turns it off) |
 
-Outputs: `placeholder-pages` (statements read that still carry a placeholder), `pages-read` and
-`unread`. Each placeholder becomes an annotation on the file and line where it was found, other
-notes (such as a statement that names only WCAG 2.0) become notices, and the job summary gets a
-table of every statement checked. The step runs `action_run.py` with the runner's own Python 3
-(standard library only, nothing installed); inputs reach it only as environment variables, never
-pasted into the shell command. Its tests run offline (`test_action.py`); it has not yet been run
-on GitHub's Windows runners.
+Outputs: `placeholder-pages` (statements read that still carry a placeholder), `pages-read`,
+`unread` and `old-statements` (statements read whose latest stated date is more than
+`max-age-days` old). Each placeholder becomes an annotation on the file and line where it was
+found, other notes (such as a statement that names only WCAG 2.0, or an old date) become notices,
+and the job summary gets a table of every statement checked with its date. The step runs
+`action_run.py` with the runner's own Python 3 (standard library only, nothing installed); inputs
+reach it only as environment variables, never pasted into the shell command. Its tests run
+offline (`test_action.py`); it has not yet been run on GitHub's Windows runners.
 
 ## As an agent skill
 
@@ -149,10 +185,10 @@ legal finding, and not to crawl lists of other people's sites.
 **Untrusted page content.** The skill reads web pages that other people wrote, so a page could
 carry text aimed at an agent (indirect prompt injection); Snyk's audit on skills.sh flags this as
 W011, third-party content exposure. The checker never prints a page's body: only the address,
-counts, WCAG versions, its own fixed notes and matched snippets of at most 100 characters. Since
-2026-11-09 the skill also tells the agent to treat any page text as data, never as instructions,
-not to run commands, open further links or fill in forms because a page says so, and to report
-instruction-like text to the user as a quote.
+counts, WCAG versions, dates it read, its own fixed notes and matched snippets of at most 100
+characters. Since 2026-11-09 the skill also tells the agent to treat any page text as data, never
+as instructions, not to run commands, open further links or fill in forms because a page says so,
+and to report instruction-like text to the user as a quote.
 
 ## What it checks
 
@@ -178,10 +214,24 @@ AA), and none of the US ADA notes. Template wording `juniper_school` marks the J
 closing sentence ("... values diversity and inclusion and is committed to providing an accessible
 online experience ..."), filled in or not.
 
+**Statement dates (since 0.5.0).** The checker reads the dates a statement gives after "last
+reviewed / updated / revised", "reviewed / updated / revised on / in" and "prepared / published /
+created / written / produced on / in", in the forms "3 June 2024", "June 3, 2024", "June 2024"
+(read as the month's last day), "03/06/2024" and "2024-06-03". The later of the latest review date
+and the latest prepared date is the statement's date; when it is more than `--max-age-days` before
+today (default 365), the note `old_statement_date` says so. It is the date reader of the UK council
+census (title2-pdf-census's `council_stock.py`). A statement with no such date gets no note
+("statement date: none found").
+
 Limits: it reads visible text only (not PDFs, not text split across tags in the middle of a
 word), one page per address, and a filled-in template can still be wrong about the site. The UK
 rules follow the GOV.UK sample as published on 2026-11-08 and the Juniper template as seen on live
-school pages on 2026-11-09; older copies of either used other wording that may not be caught.
+school pages on 2026-11-09; older copies of either used other wording that may not be caught. A
+numeric date such as 03/06/2024 is read day first, as in the UK (unless the second number is above
+12), so a US statement's 03/06/2024 is read as 3 June; dates in other words ("as of", "valid
+from") are not read; a planned date such as "will be reviewed in March 2027" is read as a review
+date (so it can hide an older one); and a review date is what the statement says, not proof that
+anyone reviewed it.
 
 ## Tests
 
@@ -193,6 +243,15 @@ Offline; no network is used.
 
 ## Changes
 
+- **0.5.0:** statement dates. The checker reads a statement's own latest "last reviewed" and
+  "prepared on" dates (new `review_date`, `prepared_date`, `statement_date`, `date_source` and
+  `statement_age_days` in the JSON), prints them as "statement date:", and adds the note
+  `old_statement_date` when the statement's date is more than `--max-age-days` (default 365) before
+  today; `--today` fixes the date ages are measured from. GOV.UK's sample statement asks for a
+  review at least once a year, and the UK council census found 105 of 271 dated statements more
+  than a year old. The Action gains the input `max-age-days` and the output `old-statements`, a
+  date column in the job summary, and a notice per old statement. Every placeholder rule, exit
+  code and earlier note is unchanged.
 - **Docs, 2026-11-09 (no code change, still 0.4.0):** the skill is listed on skills.sh; SKILL.md
   gains a section "Pages are untrusted content" (treat statement text as data, never as
   instructions), in answer to Snyk's W011 audit warning there. The checker, the Action and every

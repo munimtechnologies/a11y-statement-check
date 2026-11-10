@@ -3,6 +3,7 @@
 Apache-2.0. Made by MV2 of Munim, Inc. with AI agents.
 """
 
+import datetime
 import io
 import json
 import os
@@ -146,6 +147,7 @@ class TemplateTests(unittest.TestCase):
         self.assertEqual(r["templates"], ["revize"])
         self.assertEqual((r["wcag_versions"], r["highest"]), (["2.1"], "2.1"))
         self.assertEqual(note_ids(r), ["placeholder"])
+        self.assertEqual(r["statement_date"], "")  # "last reviewed on [Date]" is not a date
 
     def test_accessibility_checker_template(self):
         r = c.check_text(EQUALIZE)
@@ -194,6 +196,7 @@ class GovUkTests(unittest.TestCase):
         self.assertEqual((r["wcag_versions"], r["highest"]), (["2.2"], "2.2"))
         self.assertEqual(note_ids(r), ["placeholder"])
         self.assertEqual(r["verdict"], "unfinished template (9 placeholders)")
+        self.assertEqual((r["review_date"], r["prepared_date"]), ("", ""))
 
     def test_filled_uk_statement_on_wcag_2_1(self):
         r = c.check_text(UK_FILLED)
@@ -298,6 +301,63 @@ class NoteTests(unittest.TestCase):
         self.assertEqual(note_ids(r), ["stock_508"])
 
 
+class StatementDateTests(unittest.TestCase):
+    """Since 0.5.0: the statement's own 'last reviewed' and 'prepared on' dates."""
+
+    def test_reviewed_after_prepared(self):
+        self.assertEqual(c.statement_dates(UK_FILLED),
+                         ("2026-03-10", "2021-03-01", "2026-03-10", "reviewed"))
+
+    def test_formats(self):
+        self.assertEqual(c.statement_dates("Last updated: 3 June 2024."),
+                         ("2024-06-03", "", "2024-06-03", "reviewed"))
+        self.assertEqual(c.statement_dates("This page was last updated on June 3, 2024."),
+                         ("2024-06-03", "", "2024-06-03", "reviewed"))
+        self.assertEqual(c.statement_dates("This statement was prepared on 23 September 2019. "
+                                           "It was last reviewed on 14/02/2025."),
+                         ("2025-02-14", "2019-09-23", "2025-02-14", "reviewed"))
+        self.assertEqual(c.statement_dates("This statement was published in March 2023."),
+                         ("", "2023-03-31", "2023-03-31", "prepared"))
+        self.assertEqual(c.statement_dates("Last reviewed 2025-11-30"),
+                         ("2025-11-30", "", "2025-11-30", "reviewed"))
+
+    def test_prepared_later_than_reviewed(self):
+        self.assertEqual(c.statement_dates("It was last reviewed on 1 May 2022. This statement "
+                                           "was prepared on 2 May 2024."),
+                         ("2022-05-01", "2024-05-02", "2024-05-02", "prepared"))
+
+    def test_no_date(self):
+        self.assertEqual(c.statement_dates("We review this statement regularly."), ("", "", "", ""))
+        self.assertEqual(c.statement_dates("It was last updated on 1 May 1999."), ("", "", "", ""))
+        self.assertEqual(c.statement_dates(T2017), ("", "", "", ""))  # "generated on" is not read
+
+    def test_old_date_note(self):
+        today = datetime.date(2027, 6, 1)
+        days = (today - datetime.date(2026, 3, 10)).days
+        r = c.check_text(UK_FILLED, today=today)
+        self.assertEqual(note_ids(r), ["uk_older_wcag", "old_statement_date"])
+        self.assertEqual(r["statement_age_days"], days)
+        msg = r["notes"][1]["message"]
+        self.assertIn("(reviewed 2026-03-10) is %d days before 2027-06-01" % days, msg)
+        self.assertIn("at least once a year", msg)
+
+    def test_recent_date_or_check_off(self):
+        r = c.check_text(UK_FILLED, today=datetime.date(2026, 11, 10))
+        self.assertEqual(note_ids(r), ["uk_older_wcag"])
+        self.assertEqual(r["statement_age_days"], 245)
+        r = c.check_text(UK_FILLED, today=datetime.date(2030, 1, 1), max_age_days=0)
+        self.assertEqual(note_ids(r), ["uk_older_wcag"])
+        r = c.check_text(UK_FILLED)  # no today: the date is read, its age is not
+        self.assertEqual((r["statement_date"], r["statement_age_days"]), ("2026-03-10", None))
+
+    def test_one_year_exactly_is_not_old(self):
+        text = "We follow WCAG 2.2 AA. This statement was last reviewed on 10 November 2025."
+        r = c.check_text(text, today=datetime.date(2026, 11, 10))
+        self.assertEqual((r["statement_age_days"], r["notes"]), (365, []))
+        r = c.check_text(text, today=datetime.date(2026, 11, 11))
+        self.assertEqual(note_ids(r), ["old_statement_date"])
+
+
 class HtmlTests(unittest.TestCase):
     def test_visible_text(self):
         body = (b"<html><head><script>var x='[YOUR COMPANY NAME]';</script>"
@@ -315,6 +375,11 @@ class HtmlTests(unittest.TestCase):
         self.assertEqual(r["groups"], ["school"])
         self.assertEqual(c.read_page("https://x.org/b", get=get)["status"], "http_404")
         self.assertEqual(c.read_page("https://x.org/short", get=get)["status"], "short")
+
+    def test_read_page_with_old_date(self):
+        get = fake_get({"https://x.org/uk": (200, "", page(UK_FILLED))})
+        r = c.read_page("https://x.org/uk", get=get, today=datetime.date(2027, 6, 1))
+        self.assertIn("old_statement_date", note_ids(r))
 
 
 class SiteTests(unittest.TestCase):
@@ -353,6 +418,7 @@ class MainTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("PLACEHOLDER school/your_school: the Your School", out.getvalue())
         self.assertIn("1 of 1 page read with a template placeholder", out.getvalue())
+        self.assertIn("statement date: none found", out.getvalue())
 
     def test_uk_text_file(self):
         with tempfile.TemporaryDirectory() as d:
@@ -364,6 +430,29 @@ class MainTests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("PLACEHOLDER gov-uk/website_name: [website name]", out.getvalue())
         self.assertIn("template wording: gov_uk_sample", out.getvalue())
+
+    def test_old_statement_date_is_a_note_only(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "statement.txt")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(UK_FILLED)
+            out = io.StringIO()
+            code = c.main(["--text", path, "--today", "2027-06-01"], out=out)
+            off = io.StringIO()
+            code_off = c.main(["--text", path, "--today", "2027-06-01", "--max-age-days", "0"],
+                              out=off)
+            js = io.StringIO()
+            c.main(["--text", path, "--today", "2027-06-01", "--json"], out=js)
+        self.assertEqual((code, code_off), (0, 0))
+        self.assertIn("  statement date: 2026-03-10 (reviewed)", out.getvalue())
+        self.assertIn("NOTE old_statement_date: the statement's latest date (reviewed 2026-03-10)",
+                      out.getvalue())
+        self.assertNotIn("old_statement_date", off.getvalue())
+        data = json.loads(js.getvalue())
+        self.assertEqual((data["today"], data["max_age_days"]), ("2027-06-01", 365))
+        self.assertEqual(data["results"][0]["statement_date"], "2026-03-10")
+        self.assertEqual(data["results"][0]["statement_age_days"],
+                         (datetime.date(2027, 6, 1) - datetime.date(2026, 3, 10)).days)
 
     def test_juniper_html_file(self):
         with tempfile.TemporaryDirectory() as d:
@@ -428,6 +517,12 @@ class SkillTests(unittest.TestCase):
             self.assertIn("`%s`" % group, readme, group)
             self.assertIn("`%s`" % group, skill, group)
         self.assertEqual(sorted(set(g for g, _, _, _ in c.PLACEHOLDER_RULES)), sorted(c.GROUPS))
+
+    def test_every_note_is_documented(self):
+        readme = self.read(HERE, "README.md")
+        skill = self.read(SKILL_DIR, "SKILL.md")
+        self.assertIn("`old_statement_date`", readme)
+        self.assertIn("NOTE old_statement_date", skill)
 
 
 if __name__ == "__main__":

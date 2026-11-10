@@ -31,6 +31,10 @@ inputs:
     description: Optional path where the full JSON report is written.
     required: false
     default: ""
+  max-age-days:
+    description: Add a notice when a statement's own latest last-reviewed or prepared-on date is more than this many days old (0 turns it off).
+    required: false
+    default: "365"
 outputs:
   placeholder-pages:
     description: Number of statements read that still carry a template placeholder.
@@ -41,6 +45,9 @@ outputs:
   unread:
     description: Number of file patterns that matched nothing plus URLs that could not be read.
     value: ${{ steps.check.outputs.unread }}
+  old-statements:
+    description: Number of statements read whose latest stated date is more than max-age-days old.
+    value: ${{ steps.check.outputs.old-statements }}
 runs:
   using: composite
   steps:
@@ -53,6 +60,7 @@ runs:
         STC_FAIL_ON_PLACEHOLDER: ${{ inputs.fail-on-placeholder }}
         STC_FAIL_ON_UNREAD: ${{ inputs.fail-on-unread }}
         STC_JSON_REPORT: ${{ inputs.json-report }}
+        STC_MAX_AGE_DAYS: ${{ inputs.max-age-days }}
       run: |
         PY="$(command -v python3 || command -v python)"
         "$PY" -I "$GITHUB_ACTION_PATH/action_run.py"
