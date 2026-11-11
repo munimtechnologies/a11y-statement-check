@@ -6,7 +6,8 @@ Is a website's accessibility statement still an unfinished template, and when wa
 plain-text draft) and reports the placeholders that statement templates leave behind until someone
 fills them in, which WCAG versions the page names, the statement's own latest "last reviewed" or
 "prepared on" date (since 0.5.0, with a note when it is more than a year old), and dated or stock
-wording worth a second look.
+wording worth a second look. Since 0.6.0 it also notes when the page you gave it is probably not
+the statement at all but a page in front of it, and prints the address of the statement it links to.
 It knows US vendor templates, the fields and guidance notes of GOV.UK's sample accessibility
 statement for UK public sector websites (since 0.3.0) and the school statement template served on
 UK school websites built by Juniper Websites, formerly e4education (since 0.4.0).
@@ -59,6 +60,13 @@ same censuses found:
   version; only one keeps a template field
   ([uk-councils](https://github.com/munimtechnologies/title2-pdf-census/tree/main/results/uk-councils),
   a pre-registered study). A date is what a statement says; that study calls no council in breach.
+- Comparing that census council by council with another open, automated census (Accessibility.build's
+  September 2026 council table, CC BY 4.0), **12 of the 23 council pages it scored lowest link
+  straight to a statement** that MV2's reader found; none of the 13 low-score pages read again
+  named a WCAG version or gave a date
+  ([AGREE-RESULT.md](https://github.com/munimtechnologies/title2-pdf-census/blob/main/results/uk-councils/AGREE-RESULT.md),
+  pre-registered; all four predictions held). A checker that scores the page in front of the
+  statement scores the wrong page; the `hub_page` note (since 0.6.0) catches that pattern.
 
 ## Use it
 
@@ -76,8 +84,8 @@ python skills/accessibility-statement-check/statement_template_check.py --text d
 one second between requests. `--file` reads a saved HTML page. `--max-age-days` (default 365; 0
 turns it off) sets when a statement's latest date counts as old, and `--today` (YYYY-MM-DD) fixes
 the date it is measured from. Exit code 1: a template placeholder was found; 0: none found; 2: no
-page could be read. An old date is a note only and never changes the exit code. That makes it
-usable in CI on a statement draft kept in a repository.
+page could be read. An old date or a hub page is a note only and never changes the exit code. That
+makes it usable in CI on a statement draft kept in a repository.
 
 Example output for an unfinished template (an illustrative page, not a real site):
 
@@ -106,6 +114,19 @@ statement.txt
   verdict: no template placeholder found
 ```
 
+And for a page in front of the statement (an illustrative page, not a real site):
+
+```
+https://www.example.gov.uk/help/accessibility
+  read: 642 characters of text
+  WCAG versions named: none
+  statement date: none found
+  NOTE no_wcag: does not mention WCAG at all
+  NOTE hub_page: names no WCAG version and gives no statement date, but links to what looks like the accessibility statement itself (https://www.example.gov.uk/help/accessibility/accessibility-statement/); this page probably sits in front of the statement, so check that address too (this tool never follows it by itself)
+  statement link: https://www.example.gov.uk/help/accessibility/accessibility-statement/
+  verdict: no template placeholder found
+```
+
 ## In CI (GitHub Action, since v0.2.0)
 
 Keep your statement draft in the repository and let a pull request fail while it still has a
@@ -119,7 +140,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: munimtechnologies/a11y-statement-check@v0.5.0
+      - uses: munimtechnologies/a11y-statement-check@v0.6.0
         with:
           text-files: |
             docs/accessibility*.md
@@ -140,7 +161,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - id: statement
-        uses: munimtechnologies/a11y-statement-check@v0.5.0
+        uses: munimtechnologies/a11y-statement-check@v0.6.0
         with:
           urls: https://www.example.gov.uk/accessibility-statement
       - if: steps.statement.outputs.old-statements != '0'
@@ -162,11 +183,11 @@ Inputs (all optional, but give at least one of the first three):
 Outputs: `placeholder-pages` (statements read that still carry a placeholder), `pages-read`,
 `unread` and `old-statements` (statements read whose latest stated date is more than
 `max-age-days` old). Each placeholder becomes an annotation on the file and line where it was
-found, other notes (such as a statement that names only WCAG 2.0, or an old date) become notices,
-and the job summary gets a table of every statement checked with its date. The step runs
-`action_run.py` with the runner's own Python 3 (standard library only, nothing installed); inputs
-reach it only as environment variables, never pasted into the shell command. Its tests run
-offline (`test_action.py`); it has not yet been run on GitHub's Windows runners.
+found, other notes (such as a statement that names only WCAG 2.0, an old date or a hub page)
+become notices, and the job summary gets a table of every statement checked with its date. The
+step runs `action_run.py` with the runner's own Python 3 (standard library only, nothing
+installed); inputs reach it only as environment variables, never pasted into the shell command.
+Its tests run offline (`test_action.py`); it has not yet been run on GitHub's Windows runners.
 
 ## As an agent skill
 
@@ -185,10 +206,11 @@ legal finding, and not to crawl lists of other people's sites.
 **Untrusted page content.** The skill reads web pages that other people wrote, so a page could
 carry text aimed at an agent (indirect prompt injection); Snyk's audit on skills.sh flags this as
 W011, third-party content exposure. The checker never prints a page's body: only the address,
-counts, WCAG versions, dates it read, its own fixed notes and matched snippets of at most 100
-characters. Since 2026-11-09 the skill also tells the agent to treat any page text as data, never
-as instructions, not to run commands, open further links or fill in forms because a page says so,
-and to report instruction-like text to the user as a quote.
+counts, WCAG versions, dates it read, its own fixed notes, matched snippets of at most 100
+characters and (since 0.6.0, on a hub page only) at most five link addresses of at most 300
+characters. It never follows a link it finds. Since 2026-11-09 the skill also tells the agent to
+treat any page text as data, never as instructions, not to run commands, open further links or
+fill in forms because a page says so, and to report instruction-like text to the user as a quote.
 
 ## What it checks
 
@@ -223,6 +245,16 @@ today (default 365), the note `old_statement_date` says so. It is the date reade
 census (title2-pdf-census's `council_stock.py`). A statement with no such date gets no note
 ("statement date: none found").
 
+**Hub pages (since 0.6.0).** An HTML page (a URL or `--file`) that names no WCAG version, gives no
+statement date, has no placeholder and does not use GOV.UK's compliance sentence, but links to what
+looks like the accessibility statement (the link text says "accessibility statement" or "datganiad
+hygyrchedd", or the address says accessibility-statement, accessibility_statement or
+AccessibilityStatement), gets the note `hub_page` and a line `statement link:` for each such link
+(at most five, in page order, the page itself left out). The JSON gains `statement_links` and
+`hub_page` on every page read. The tool never follows the link: run it again on that address. In a
+saved file only absolute links count. These are the two strongest link rules of the UK council
+census's reader.
+
 Limits: it reads visible text only (not PDFs, not text split across tags in the middle of a
 word), one page per address, and a filled-in template can still be wrong about the site. The UK
 rules follow the GOV.UK sample as published on 2026-11-08 and the Juniper template as seen on live
@@ -231,18 +263,27 @@ numeric date such as 03/06/2024 is read day first, as in the UK (unless the seco
 12), so a US statement's 03/06/2024 is read as 3 June; dates in other words ("as of", "valid
 from") are not read; a planned date such as "will be reviewed in March 2027" is read as a review
 date (so it can hide an older one); and a review date is what the statement says, not proof that
-anyone reviewed it.
+anyone reviewed it. A short statement that names no WCAG version and no date but links to another
+statement (for example an app's) also gets `hub_page`; read it as "check the linked page too".
 
 ## Tests
 
 ```
-python -m unittest -v test_statement_template_check.py test_action.py
+python -m unittest -v test_statement_template_check.py test_action.py test_hub_page.py
 ```
 
 Offline; no network is used.
 
 ## Changes
 
+- **0.6.0:** hub pages. A page that names no WCAG version, gives no statement date and has no
+  placeholder or GOV.UK compliance sentence, but links to what looks like the accessibility
+  statement, gets the note `hub_page` and one `statement link:` line per such link; the JSON gains
+  `statement_links` and `hub_page`. MV2's pre-registered comparison of two automated censuses of UK
+  council statements found that 12 of the 23 council pages one census scored lowest were such pages.
+  The tool never follows a link by itself. The Action (`action_run` 0.6.0) passes the note on as a
+  notice and is otherwise unchanged; no input, output, placeholder rule, earlier note or exit code
+  changed. New offline tests: `test_hub_page.py`.
 - **0.5.0:** statement dates. The checker reads a statement's own latest "last reviewed" and
   "prepared on" dates (new `review_date`, `prepared_date`, `statement_date`, `date_source` and
   `statement_age_days` in the JSON), prints them as "statement date:", and adds the note

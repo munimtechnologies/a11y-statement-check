@@ -1,4 +1,4 @@
-"""statement_template_check 0.5.0: is a website's accessibility statement still an unfinished template?
+"""statement_template_check 0.6.0: is a website's accessibility statement still an unfinished template?
 
 Reads one accessibility statement (a URL, a saved HTML file or a plain-text file) and reports:
 
@@ -25,16 +25,23 @@ Reads one accessibility statement (a URL, a saved HTML file or a plain-text file
     GOV.UK's sample statement asks public sector bodies to review their statement at least once a
     year, and MV2's census of UK council statements (November 2026) found 105 of 271 dated ones
     carrying a date more than a year old. The date reader is the one of title2-pdf-census's
-    council_stock.py 0.1.0.
+    council_stock.py 0.1.0;
+  * since 0.6.0, a note (hub_page) when an HTML page names no WCAG version and gives no statement
+    date but links to what looks like the accessibility statement itself, with that link's
+    address: the page probably sits in front of the statement. MV2's comparison of two automated
+    censuses of UK council statements (November 2026) found that 12 of the 23 council pages one
+    census scored lowest were such pages, each linking straight to a statement the other census
+    read; none of the 13 low-score pages read again named a WCAG version or gave a date.
 
 With --site it asks a site for the three stock addresses where those censuses found most
 unfinished templates (/153/Accessibility, /accessibility_statement/index.php and
-/accessibility-statement), honouring robots.txt, one request at a time with a pause between.
+/accessibility-statement), honouring robots.txt, one request at a time with a pause between. It
+never follows a link it finds on a page.
 
 It reads what a statement says, not whether the website is accessible, and it is not legal
 advice. Exit code: 1 if any page read has a template placeholder, 0 if none does, 2 if no page
-could be read (an old date is a note only and never changes the exit code). Standard library
-only. Apache-2.0. Made by MV2 of Munim, Inc. with AI agents.
+could be read (an old date or a hub page is a note only and never changes the exit code).
+Standard library only. Apache-2.0. Made by MV2 of Munim, Inc. with AI agents.
 """
 
 import argparse
@@ -50,7 +57,7 @@ import urllib.parse
 import urllib.request
 import urllib.robotparser
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 
 UA = ("statement-template-check/%s (MV2, Munim, Inc.; mv2@munimtech.com; reads public pages only)"
       % __version__)
@@ -201,6 +208,15 @@ MONTHS = {m: i for i, m in enumerate(("jan", "feb", "mar", "apr", "may", "jun", 
                                       "sep", "oct", "nov", "dec"), 1)}
 DATE_YEARS = (2000, 2099)  # dates outside these years are not read as statement dates
 
+# Links to a statement (since 0.6.0): the link text says "accessibility statement" (or the Welsh
+# "datganiad hygyrchedd"), or the address does ("accessibility-statement", "accessibility_statement",
+# "AccessibilityStatement"). These are the two strongest link scores of title2-pdf-census's
+# council_stock.py 0.1.0. At most MAX_STATEMENT_LINKS addresses are kept, in page order.
+STATEMENT_TEXT_RE = re.compile(r"accessibility\s+statement|datganiad\s+hygyrchedd", re.I)
+STATEMENT_HREF_RE = re.compile(r"accessibility[-_ ]?statement", re.I)
+MAX_STATEMENT_LINKS = 5
+MAX_LINK_CHARS = 300
+
 NOTES = {
     "placeholder": "template placeholders are still in the text: fill them in (name, contact, "
                    "standard, dates) or remove them",
@@ -222,6 +238,9 @@ NOTES = {
     "old_statement_date": "the statement's latest date (%s %s) is %d days before %s; GOV.UK's "
                           "sample statement asks public sector bodies to review their statement "
                           "at least once a year, so check that it is still current",
+    "hub_page": "names no WCAG version and gives no statement date, but links to what looks like "
+                "the accessibility statement itself (%s); this page probably sits in front of the "
+                "statement, so check that address too (this tool never follows it by itself)",
 }
 
 
@@ -337,6 +356,7 @@ def check_text(text, today=None, max_age_days=MAX_AGE_DAYS):
             "highest": highest, "dates": dates,
             "review_date": review, "prepared_date": prepared, "statement_date": stated,
             "date_source": source, "statement_age_days": age,
+            "statement_links": [], "hub_page": False,
             "notes": notes, "text_chars": len(text),
             "verdict": ("unfinished template (%d placeholder%s)"
                         % (len(found), "" if len(found) == 1 else "s")) if found
@@ -365,14 +385,19 @@ class _Text(html.parser.HTMLParser):
             self.parts.append(data)
 
 
-def visible_text(body, ctype=""):
-    """The visible text of an HTML page (bytes or str), scripts and styles left out."""
+def _decode(body, ctype=""):
     if isinstance(body, bytes):
         m = re.search(r"charset=([\w-]+)", ctype or "", re.I)
         try:
             body = body.decode(m.group(1) if m else "utf-8", "replace")
         except LookupError:
             body = body.decode("utf-8", "replace")
+    return body
+
+
+def visible_text(body, ctype=""):
+    """The visible text of an HTML page (bytes or str), scripts and styles left out."""
+    body = _decode(body, ctype)
     p = _Text()
     try:
         p.feed(body)
@@ -387,6 +412,101 @@ def is_html(ctype, body):
         return True
     head = body[:300].lstrip().lower()
     return head.startswith(b"<!doctype html") or head.startswith(b"<html")
+
+
+class _Links(html.parser.HTMLParser):
+    """(href, text) of every <a href>, the text including aria-label and title (since 0.6.0)."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.links, self._href, self._text = [], None, []
+
+    def handle_starttag(self, tag, attrs):
+        if tag != "a":
+            return
+        if self._href is not None:
+            self.close_link()
+        a = dict(attrs)
+        if a.get("href") is None:
+            return
+        self._href = a.get("href") or ""
+        self._text = [a.get("aria-label") or "", a.get("title") or ""]
+
+    def handle_endtag(self, tag):
+        if tag == "a" and self._href is not None:
+            self.close_link()
+
+    def handle_data(self, data):
+        if self._href is not None:
+            self._text.append(data)
+
+    def close_link(self):
+        self.links.append((self._href, " ".join(" ".join(self._text).split())))
+        self._href, self._text = None, []
+
+
+def find_links(body, ctype=""):
+    """(href, text) of every link on an HTML page (bytes or str), in page order."""
+    p = _Links()
+    try:
+        p.feed(_decode(body, ctype))
+        p.close()
+    except Exception:  # a broken page keeps what was parsed before the error
+        pass
+    if p._href is not None:
+        p.close_link()
+    return p.links
+
+
+def page_key(url):
+    """host without 'www.' plus path, lower case, without a trailing slash, query or fragment."""
+    try:
+        p = urllib.parse.urlsplit((url or "").strip())
+        host = (p.hostname or "").lower().rstrip(".")
+    except ValueError:
+        return ""
+    if host.startswith("www."):
+        host = host[4:]
+    return host + urllib.parse.unquote(p.path).lower().rstrip("/")
+
+
+def statement_links(links, page_url=""):
+    """The absolute addresses (page order, no repeats, at most MAX_STATEMENT_LINKS) of the links
+    whose text or address says accessibility statement, other than the page itself. Relative links
+    are resolved against page_url; a saved file has none, so only its absolute links count."""
+    own, out = page_key(page_url), []
+    for href, text in links:
+        href = (href or "").strip()
+        if not href or href.startswith(("#", "mailto:", "tel:", "javascript:")):
+            continue
+        try:
+            url = urllib.parse.urldefrag(urllib.parse.urljoin(page_url or "", href))[0]
+        except ValueError:
+            continue
+        if not url.lower().startswith(("http://", "https://")) or len(url) > MAX_LINK_CHARS:
+            continue
+        if not (STATEMENT_TEXT_RE.search(text or "")
+                or STATEMENT_HREF_RE.search(urllib.parse.unquote(href))):
+            continue
+        if (own and page_key(url) == own) or url in out:
+            continue
+        out.append(url)
+        if len(out) == MAX_STATEMENT_LINKS:
+            break
+    return out
+
+
+def add_links(r, body, ctype="", page_url=""):
+    """Adds statement_links and, when the page names no WCAG version, gives no statement date,
+    uses no GOV.UK compliance sentence, has no placeholder and links to a statement, hub_page
+    and its note (since 0.6.0)."""
+    links = statement_links(find_links(body, ctype), page_url)
+    hub = bool(links and not r["wcag_versions"] and not r["statement_date"]
+               and "gov_uk_sample" not in r["templates"] and not r["placeholder"])
+    r["statement_links"], r["hub_page"] = links, hub
+    if hub:
+        r["notes"].append({"id": "hub_page", "message": NOTES["hub_page"] % links[0]})
+    return r
 
 
 # ---------------------------------------------------------------- reading the web
@@ -448,7 +568,7 @@ def read_page(url, get=http_get, allowed=None, stock="", today=None, max_age_day
         return out
     out["status"] = "ok"
     out.update(check_text(text, today=today, max_age_days=max_age_days))
-    return out
+    return add_links(out, body, ctype, out["final_url"])
 
 
 def site_base(site):
@@ -480,6 +600,8 @@ def check_file(path, html_file=True, today=None, max_age_days=MAX_AGE_DAYS):
     text = visible_text(body) if html_file else body.decode("utf-8", "replace")
     out = {"source": path, "final_url": "", "status": "ok", "stock_address": ""}
     out.update(check_text(text, today=today, max_age_days=max_age_days))
+    if html_file:
+        add_links(out, body)
     return out
 
 
@@ -503,6 +625,9 @@ def format_result(r):
         lines.append("  statement date: none found")
     for n in r["notes"]:
         lines.append("  NOTE %s: %s" % (n["id"], n["message"]))
+    if r.get("hub_page"):
+        for link in r.get("statement_links", []):
+            lines.append("  statement link: %s" % link)
     lines.append("  verdict: %s" % r["verdict"])
     return lines
 
@@ -560,10 +685,12 @@ def main(argv=None, get=http_get, sleep=time.sleep, out=None):
     else:
         for r in results:
             out.write("\n".join(format_result(r)) + "\n")
-        n = sum(1 for r in results if r.get("placeholder"))
-        out.write("statement_template_check %s: %d of %d page%s read with a template placeholder\n"
+        n = sum(1 for r in results if r.get("status") == "ok" and r.get("placeholder"))
+        hubs = sum(1 for r in results if r.get("hub_page"))
+        out.write("statement_template_check %s: %d of %d page%s read with a template placeholder%s\n"
                   % (__version__, n, sum(1 for r in results if r.get("status") == "ok"),
-                     "" if len(results) == 1 else "s"))
+                     "" if len(results) == 1 else "s",
+                     "; %d may sit in front of the statement (hub_page)" % hubs if hubs else ""))
     return code
 
 
