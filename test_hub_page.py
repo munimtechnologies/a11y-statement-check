@@ -193,7 +193,7 @@ class DocTests(unittest.TestCase):
         self.assertIn("test_hub_page.py", readme)
         self.assertIn("NOTE hub_page", skill)
         self.assertIn("statement link:", skill)
-        self.assertEqual(c.__version__, "0.6.0")
+        self.assertGreaterEqual(tuple(int(x) for x in c.__version__.split(".")), (0, 6, 0))
 
 
 if __name__ == "__main__":

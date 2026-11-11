@@ -1,4 +1,4 @@
-"""statement_template_check 0.6.0: is a website's accessibility statement still an unfinished template?
+"""statement_template_check 0.7.0: is a website's accessibility statement still an unfinished template?
 
 Reads one accessibility statement (a URL, a saved HTML file or a plain-text file) and reports:
 
@@ -32,6 +32,10 @@ Reads one accessibility statement (a URL, a saved HTML file or a plain-text file
     censuses of UK council statements (November 2026) found that 12 of the 23 council pages one
     census scored lowest were such pages, each linking straight to a statement the other census
     read; none of the 13 low-score pages read again named a WCAG version or gave a date.
+  * since 0.7.0, a date right after "will be", "is due to be", "next" and the like ("It will be
+    reviewed in March 2027") is a planned review, not the latest one, and is no longer read as the
+    statement's date. MV2's census of UK government organisations' statements (November 2026)
+    found one statement whose date was such a planned review.
 
 With --site it asks a site for the three stock addresses where those censuses found most
 unfinished templates (/153/Accessibility, /accessibility_statement/index.php and
@@ -57,7 +61,7 @@ import urllib.parse
 import urllib.request
 import urllib.robotparser
 
-__version__ = "0.6.0"
+__version__ = "0.7.0"
 
 UA = ("statement-template-check/%s (MV2, Munim, Inc.; mv2@munimtech.com; reads public pages only)"
       % __version__)
@@ -207,6 +211,11 @@ PREPARED_RE = re.compile(r"\b(?:prepared|published|created|written|produced)\s+(
 MONTHS = {m: i for i, m in enumerate(("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug",
                                       "sep", "oct", "nov", "dec"), 1)}
 DATE_YEARS = (2000, 2099)  # dates outside these years are not read as statement dates
+# A date right after "will be", "shall be", "should be", "must be", "to be" or "next" ("It will be
+# reviewed in March 2027", "is due to be updated on ...") is a planned review or publication, not
+# the latest one, so it is not read as a statement date (since 0.7.0).
+PLANNED_RE = re.compile(r"\b(?:will|shall|should|must|to|next)\s+(?:be\s+)?(?:next\s+)?$", re.I)
+PLANNED_WINDOW = 25
 
 # Links to a statement (since 0.6.0): the link text says "accessibility statement" (or the Welsh
 # "datganiad hygyrchedd"), or the address does ("accessibility-statement", "accessibility_statement",
@@ -270,13 +279,20 @@ def _date(m):
         return None
 
 
+def _planned(flat, m):
+    """True when the words right before a date phrase make it a planned date (since 0.7.0)."""
+    return bool(PLANNED_RE.search(flat[max(0, m.start() - PLANNED_WINDOW):m.start()]))
+
+
 def statement_dates(text):
     """(review_date, prepared_date, statement_date, source) as ISO strings ('' when none): the
     latest 'last reviewed / updated' date, the latest 'prepared / published on' date, and the
     later of the two ('reviewed' or 'prepared')."""
     flat = " ".join(text.split())
-    reviews = [d for d in (_date(m) for m in REVIEW_RE.finditer(flat)) if d]
-    prepared = [d for d in (_date(m) for m in PREPARED_RE.finditer(flat)) if d]
+    reviews = [d for d in (_date(m) for m in REVIEW_RE.finditer(flat)
+                           if not _planned(flat, m)) if d]
+    prepared = [d for d in (_date(m) for m in PREPARED_RE.finditer(flat)
+                            if not _planned(flat, m)) if d]
     r = max(reviews) if reviews else None
     p = max(prepared) if prepared else None
     if r and (not p or r >= p):

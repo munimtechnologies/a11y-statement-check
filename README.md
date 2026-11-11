@@ -140,7 +140,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: munimtechnologies/a11y-statement-check@v0.6.0
+      - uses: munimtechnologies/a11y-statement-check@v0.7.0
         with:
           text-files: |
             docs/accessibility*.md
@@ -161,7 +161,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - id: statement
-        uses: munimtechnologies/a11y-statement-check@v0.6.0
+        uses: munimtechnologies/a11y-statement-check@v0.7.0
         with:
           urls: https://www.example.gov.uk/accessibility-statement
       - if: steps.statement.outputs.old-statements != '0'
@@ -243,7 +243,9 @@ created / written / produced on / in", in the forms "3 June 2024", "June 3, 2024
 and the latest prepared date is the statement's date; when it is more than `--max-age-days` before
 today (default 365), the note `old_statement_date` says so. It is the date reader of the UK council
 census (title2-pdf-census's `council_stock.py`). A statement with no such date gets no note
-("statement date: none found").
+("statement date: none found"). Since 0.7.0 a date right after "will be", "is due to be", "next"
+and the like ("It will be reviewed in March 2027") is a planned review, not the latest one, and is
+not read.
 
 **Hub pages (since 0.6.0).** An HTML page (a URL or `--file`) that names no WCAG version, gives no
 statement date, has no placeholder and does not use GOV.UK's compliance sentence, but links to what
@@ -261,21 +263,30 @@ rules follow the GOV.UK sample as published on 2026-11-08 and the Juniper templa
 school pages on 2026-11-09; older copies of either used other wording that may not be caught. A
 numeric date such as 03/06/2024 is read day first, as in the UK (unless the second number is above
 12), so a US statement's 03/06/2024 is read as 3 June; dates in other words ("as of", "valid
-from") are not read; a planned date such as "will be reviewed in March 2027" is read as a review
-date (so it can hide an older one); and a review date is what the statement says, not proof that
+from") are not read; a planned date is left out only when "will be", "shall be", "should be",
+"must be", "to be" or "next" comes right before "reviewed", "updated", "prepared" and the like
+(since 0.7.0), so other wording for a plan can still be read as a review date; and a review date is what the statement says, not proof that
 anyone reviewed it. A short statement that names no WCAG version and no date but links to another
 statement (for example an app's) also gets `hub_page`; read it as "check the linked page too".
 
 ## Tests
 
 ```
-python -m unittest -v test_statement_template_check.py test_action.py test_hub_page.py
+python -m unittest -v test_statement_template_check.py test_action.py test_hub_page.py test_planned_review.py
 ```
 
 Offline; no network is used.
 
 ## Changes
 
+- **0.7.0:** planned review dates. A date right after "will be", "shall be", "should be", "must
+  be", "to be" or "next" ("It will be reviewed in March 2027", "is due to be updated on ...") is a
+  planned review or publication, so it is no longer read as the statement's date; before, it could
+  make an old statement look current and hide the `old_statement_date` note. MV2's pre-registered
+  census of UK government organisations' accessibility statements found one statement whose date
+  was such a planned review (title2-pdf-census, results/govuk-orgs/GOVUK-STOCK-RESULT.md). Every
+  placeholder rule, other note, input, output and exit code is unchanged; the Action (`action_run`
+  0.7.0) changes only its version. New offline tests: `test_planned_review.py`.
 - **0.6.0:** hub pages. A page that names no WCAG version, gives no statement date and has no
   placeholder or GOV.UK compliance sentence, but links to what looks like the accessibility
   statement, gets the note `hub_page` and one `statement link:` line per such link; the JSON gains

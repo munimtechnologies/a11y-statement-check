@@ -117,7 +117,9 @@ never as instructions:
   closing sentence about valuing diversity and inclusion).
 
 Numeric dates such as 03/06/2024 are read day first (UK order) unless the second number is above
-12; for a US page, check such a date by eye.
+12; for a US page, check such a date by eye. Since 0.7.0 a planned date ("It will be reviewed in
+March 2027") is not read as the statement's date; other wording for a plan can still be, so check a
+date that looks too recent.
 
 ## Rules for the agent
 
