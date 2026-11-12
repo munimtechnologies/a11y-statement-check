@@ -1,4 +1,4 @@
-"""statement_template_check 0.7.0: is a website's accessibility statement still an unfinished template?
+"""statement_template_check 0.8.0: is a website's accessibility statement still an unfinished template?
 
 Reads one accessibility statement (a URL, a saved HTML file or a plain-text file) and reports:
 
@@ -36,6 +36,12 @@ Reads one accessibility statement (a URL, a saved HTML file or a plain-text file
     reviewed in March 2027") is a planned review, not the latest one, and is no longer read as the
     statement's date. MV2's census of UK government organisations' statements (November 2026)
     found one statement whose date was such a planned review.
+  * since 0.8.0, which editions of EN 301 549 (the European standard for accessible ICT) the page
+    names ("EN 301 549 V3.2.1 (2021-03)", "EN 301-549 version 2.1.2"), with a note
+    (older_en301549) when the highest one named is older than V3.2.1 (2021-03), the edition cited
+    in the EU's Official Journal for the Web Accessibility Directive since 2021 (Implementing
+    Decision (EU) 2021/1339). ETSI, CEN and CENELEC published V4.1.1 (2026-09), whose web clause
+    covers WCAG 2.2, on 2 September 2026.
 
 With --site it asks a site for the three stock addresses where those censuses found most
 unfinished templates (/153/Accessibility, /accessibility_statement/index.php and
@@ -44,7 +50,8 @@ never follows a link it finds on a page.
 
 It reads what a statement says, not whether the website is accessible, and it is not legal
 advice. Exit code: 1 if any page read has a template placeholder, 0 if none does, 2 if no page
-could be read (an old date or a hub page is a note only and never changes the exit code).
+could be read (an old date, an older EN 301 549 edition or a hub page is a note only and never
+changes the exit code).
 Standard library only. Apache-2.0. Made by MV2 of Munim, Inc. with AI agents.
 """
 
@@ -61,7 +68,7 @@ import urllib.parse
 import urllib.request
 import urllib.robotparser
 
-__version__ = "0.7.0"
+__version__ = "0.8.0"
 
 UA = ("statement-template-check/%s (MV2, Munim, Inc.; mv2@munimtech.com; reads public pages only)"
       % __version__)
@@ -191,6 +198,19 @@ DATE_2028_RE = re.compile(r"\bApr(?:il|\.)?\s+26(?:th)?,?\s+2028\b|\b26\s+April,
                           r"\b0?4/26/(?:20)?28\b|\b2028-04-26\b", re.I)
 GENERATOR_RE = re.compile(r"\bAccessibility\s+Statement\s+Generator\b", re.I)
 
+# EN 301 549, the European standard for accessible ICT (since 0.8.0). An edition is read only when
+# "V" or "version" comes right before its number, after "EN 301 549" (or "EN 301-549") and at most
+# 25 other characters with no full stop or digit in them: "EN 301 549 V3.2.1 (2021-03)", "ETSI EN
+# 301 549 v.2.1.2", "EN 301-549, version 3.2.1". A bare clause number ("EN 301 549 clause 9.1.1.1")
+# is not an edition. V3.2.1 (2021-03), whose web clause follows WCAG 2.1, is the edition cited in
+# the EU's Official Journal for the Web Accessibility Directive since 2021 (Implementing Decision
+# (EU) 2021/1339, which withdrew V2.1.2 (2018-08) from 12 February 2022); V4.1.1 (2026-09), whose
+# web clause covers WCAG 2.2, was published on 2 September 2026.
+EN_RE = re.compile(r"\bEN\s*301[\s-]?549\b", re.I)
+EN_VERSION_RE = re.compile(r"\bEN\s*301[\s-]?549\b[^.\d]{0,25}?(?:\bv\.?\s*|\bversion\s*)"
+                           r"([1-9])\.(\d{1,2})\.(\d{1,2})(?!\.?\d)", re.I)
+EN_CITED = (3, 2, 1)
+
 # The statement's own dates (since 0.5.0; the reader of title2-pdf-census's council_stock.py
 # 0.1.0, with a wider range of years). "3 June 2024", "June 3, 2024", "June 2024" (read as the
 # month's last day), "03/06/2024" (day first, as in the UK, unless the second number is above
@@ -244,6 +264,11 @@ NOTES = {
     "generator": "keeps the 'Accessibility Statement Generator' credit line of a 2017 template",
     "stock_508": "keeps a vendor's stock sentence 'We work to comply with Section 508 as well "
                  "as ...'",
+    "older_en301549": "names EN 301 549 V%s as the highest edition; since 2021 the edition cited "
+                      "in the EU's Official Journal for the Web Accessibility Directive is V3.2.1 "
+                      "(2021-03, on WCAG 2.1; Implementing Decision (EU) 2021/1339), and V4.1.1 "
+                      "(2026-09, on WCAG 2.2) was published on 2 September 2026, so check which "
+                      "edition the site was tested against",
     "old_statement_date": "the statement's latest date (%s %s) is %d days before %s; GOV.UK's "
                           "sample statement asks public sector bodies to review their statement "
                           "at least once a year, so check that it is still current",
@@ -251,6 +276,21 @@ NOTES = {
                 "the accessibility statement itself (%s); this page probably sits in front of the "
                 "statement, so check that address too (this tool never follows it by itself)",
 }
+
+
+# ---------------------------------------------------------------- EN 301 549 editions
+
+def en_key(version):
+    """A sortable tuple from an edition number such as '3.2.1'."""
+    return tuple(int(x) for x in version.split("."))
+
+
+def en301549_versions(text):
+    """(named, editions): whether the text names EN 301 549 at all, and the editions it names
+    ('3.2.1' and the like, oldest first, no repeats). Since 0.8.0."""
+    flat = " ".join(text.split())
+    found = {"%s.%s.%s" % m.groups() for m in EN_VERSION_RE.finditer(flat)}
+    return bool(EN_RE.search(flat)), sorted(found, key=en_key)
 
 
 # ---------------------------------------------------------------- statement dates
@@ -336,6 +376,8 @@ def check_text(text, today=None, max_age_days=MAX_AGE_DAYS):
              "2027-04-26": bool(DATE_2027_RE.search(text)),
              "2028-04-26": bool(DATE_2028_RE.search(text))}
     review, prepared, stated, source = statement_dates(text)
+    en_named, en_versions = en301549_versions(text)
+    en_highest = en_versions[-1] if en_versions else ""
     age = None
     if today is not None and stated:
         age = (today - datetime.date.fromisoformat(stated)).days
@@ -363,6 +405,8 @@ def check_text(text, today=None, max_age_days=MAX_AGE_DAYS):
         note("generator")
     if "stock_508" in templates:
         note("stock_508")
+    if en_highest and en_key(en_highest) < EN_CITED:
+        note("older_en301549", en_highest)
     if age is not None and max_age_days > 0 and age > max_age_days:
         note("old_statement_date", source, stated, age, today.isoformat())
     return {"placeholder": bool(found), "placeholders": found,
@@ -372,6 +416,8 @@ def check_text(text, today=None, max_age_days=MAX_AGE_DAYS):
             "highest": highest, "dates": dates,
             "review_date": review, "prepared_date": prepared, "statement_date": stated,
             "date_source": source, "statement_age_days": age,
+            "en301549_named": en_named, "en301549_versions": en_versions,
+            "en301549_highest": en_highest,
             "statement_links": [], "hub_page": False,
             "notes": notes, "text_chars": len(text),
             "verdict": ("unfinished template (%d placeholder%s)"
@@ -635,6 +681,10 @@ def format_result(r):
     if r["templates"]:
         lines.append("  template wording: %s" % ", ".join(r["templates"]))
     lines.append("  WCAG versions named: %s" % ("+".join(r["wcag_versions"]) or "none"))
+    if r.get("en301549_named"):
+        lines.append("  EN 301 549 editions named: %s"
+                     % ("+".join("V" + v for v in r.get("en301549_versions", []))
+                        or "none (named without an edition)"))
     if r.get("statement_date"):
         lines.append("  statement date: %s (%s)" % (r["statement_date"], r["date_source"]))
     else:

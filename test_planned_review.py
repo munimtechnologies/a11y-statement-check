@@ -1,4 +1,4 @@
-"""Offline tests of planned review dates in statement_template_check.py 0.7.0 (no network is used).
+"""Offline tests of planned review dates in statement_template_check.py (since 0.7.0; no network).
 
 A date right after "will be", "is due to be", "next" and the like ("It will be reviewed in March
 2027") is a planned review, not the latest one, so since 0.7.0 it is not read as the statement's
@@ -74,7 +74,7 @@ class DocTests(unittest.TestCase):
     def test_documented(self):
         readme = self.read(HERE, "README.md")
         skill = self.read(SKILL_DIR, "SKILL.md")
-        self.assertEqual(c.__version__, "0.7.0")
+        self.assertGreaterEqual(tuple(int(x) for x in c.__version__.split(".")), (0, 7, 0))
         self.assertIn("- **%s:**" % c.__version__, readme)
         self.assertIn("@v%s" % c.__version__, readme)
         self.assertNotIn("@v0.6.0", readme)

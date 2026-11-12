@@ -1,5 +1,5 @@
 # Copyright 2026 Munim, Inc. Licensed under the Apache License, Version 2.0 (Apache-2.0).
-"""action_run 0.7.0: the GitHub Action entry point of a11y-statement-check.
+"""action_run 0.8.0: the GitHub Action entry point of a11y-statement-check.
 
 Checks accessibility statement drafts kept in a repository (plain text or Markdown, saved HTML)
 and, if asked, published statement URLs, with statement_template_check.py's rules (since 0.3.0
@@ -9,10 +9,12 @@ and line where it can find them), a table in the job summary, and the step outpu
 placeholder-pages, pages-read, unread and (since 0.5.0) old-statements: statements whose own
 latest "last reviewed" or "prepared on" date is more than max-age-days old (default 365; each
 also gets a notice). Since 0.6.0 a page that names no WCAG version and gives no date but links to
-an accessibility statement gets the notice hub_page, with that link's address in the log. Exit
-code 1 when a placeholder is found (unless fail-on-placeholder is false), 2 when a file or URL
-given could not be read (unless fail-on-unread is false), else 0; an old date or a hub page never
-changes it (use the old-statements output to act on an old date).
+an accessibility statement gets the notice hub_page, with that link's address in the log. Since
+0.8.0 a statement whose highest EN 301 549 edition is older than V3.2.1 gets the notice
+older_en301549. Exit code 1 when a placeholder is found (unless fail-on-placeholder is false), 2
+when a file or URL given could not be read (unless fail-on-unread is false), else 0; an old date,
+an older EN 301 549 edition or a hub page never changes it (use the old-statements output to act
+on an old date).
 
 Inputs come from environment variables set by action.yml (never from the shell command line):
 STC_TEXT_FILES, STC_HTML_FILES, STC_URLS (one entry per line; file entries may be glob patterns
@@ -34,7 +36,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "skills", "accessibility-statement-check"))
 import statement_template_check as stc  # noqa: E402
 
-__version__ = "0.7.0"
+__version__ = "0.8.0"
 TRUE = ("true", "yes", "on", "1")
 TITLE = "Accessibility statement placeholder"
 

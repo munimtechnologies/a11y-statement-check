@@ -8,6 +8,8 @@ fills them in, which WCAG versions the page names, the statement's own latest "l
 "prepared on" date (since 0.5.0, with a note when it is more than a year old), and dated or stock
 wording worth a second look. Since 0.6.0 it also notes when the page you gave it is probably not
 the statement at all but a page in front of it, and prints the address of the statement it links to.
+Since 0.8.0 it reports which editions of EN 301 549, the European standard for accessible ICT, a
+statement names, with a note when the highest one is older than V3.2.1.
 It knows US vendor templates, the fields and guidance notes of GOV.UK's sample accessibility
 statement for UK public sector websites (since 0.3.0) and the school statement template served on
 UK school websites built by Juniper Websites, formerly e4education (since 0.4.0).
@@ -68,6 +70,13 @@ same censuses found:
   pre-registered; all four predictions held). A checker that scores the page in front of the
   statement scores the wrong page; the `hub_page` note (since 0.6.0) catches that pattern.
 
+In the EU, statements under the Web Accessibility Directive and the European Accessibility Act
+often name an edition of EN 301 549. ETSI, CEN and CENELEC published EN 301 549 V4.1.1 (2026-09),
+whose web clause covers WCAG 2.2, on 2 September 2026; V3.2.1 (2021-03), on WCAG 2.1, is still the
+edition cited in the EU's Official Journal for the Web Accessibility Directive (Implementing
+Decision (EU) 2021/1339, which withdrew V2.1.2 from 12 February 2022). The `older_en301549` note
+(since 0.8.0) flags a statement whose newest edition named is older than V3.2.1.
+
 ## Use it
 
 Python 3.8 or newer, standard library only, nothing to install:
@@ -84,8 +93,8 @@ python skills/accessibility-statement-check/statement_template_check.py --text d
 one second between requests. `--file` reads a saved HTML page. `--max-age-days` (default 365; 0
 turns it off) sets when a statement's latest date counts as old, and `--today` (YYYY-MM-DD) fixes
 the date it is measured from. Exit code 1: a template placeholder was found; 0: none found; 2: no
-page could be read. An old date or a hub page is a note only and never changes the exit code. That
-makes it usable in CI on a statement draft kept in a repository.
+page could be read. An old date, an older EN 301 549 edition or a hub page is a note only and never
+changes the exit code. That makes it usable in CI on a statement draft kept in a repository.
 
 Example output for an unfinished template (an illustrative page, not a real site):
 
@@ -127,6 +136,19 @@ https://www.example.gov.uk/help/accessibility
   verdict: no template placeholder found
 ```
 
+And for an EU statement that names an older EN 301 549 edition (an illustrative text file, the
+one in `test_en301549.py`):
+
+```
+statement.txt
+  read: 331 characters of text
+  WCAG versions named: 2.1
+  EN 301 549 editions named: V2.1.2
+  statement date: none found
+  NOTE older_en301549: names EN 301 549 V2.1.2 as the highest edition; since 2021 the edition cited in the EU's Official Journal for the Web Accessibility Directive is V3.2.1 (2021-03, on WCAG 2.1; Implementing Decision (EU) 2021/1339), and V4.1.1 (2026-09, on WCAG 2.2) was published on 2 September 2026, so check which edition the site was tested against
+  verdict: no template placeholder found
+```
+
 ## In CI (GitHub Action, since v0.2.0)
 
 Keep your statement draft in the repository and let a pull request fail while it still has a
@@ -140,7 +162,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: munimtechnologies/a11y-statement-check@v0.7.0
+      - uses: munimtechnologies/a11y-statement-check@v0.8.0
         with:
           text-files: |
             docs/accessibility*.md
@@ -161,7 +183,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - id: statement
-        uses: munimtechnologies/a11y-statement-check@v0.7.0
+        uses: munimtechnologies/a11y-statement-check@v0.8.0
         with:
           urls: https://www.example.gov.uk/accessibility-statement
       - if: steps.statement.outputs.old-statements != '0'
@@ -183,11 +205,12 @@ Inputs (all optional, but give at least one of the first three):
 Outputs: `placeholder-pages` (statements read that still carry a placeholder), `pages-read`,
 `unread` and `old-statements` (statements read whose latest stated date is more than
 `max-age-days` old). Each placeholder becomes an annotation on the file and line where it was
-found, other notes (such as a statement that names only WCAG 2.0, an old date or a hub page)
-become notices, and the job summary gets a table of every statement checked with its date. The
-step runs `action_run.py` with the runner's own Python 3 (standard library only, nothing
-installed); inputs reach it only as environment variables, never pasted into the shell command.
-Its tests run offline (`test_action.py`); it has not yet been run on GitHub's Windows runners.
+found, other notes (such as a statement that names only WCAG 2.0, an old date, an older EN 301 549
+edition or a hub page) become notices, and the job summary gets a table of every statement checked
+with its date. The step runs `action_run.py` with the runner's own Python 3 (standard library only,
+nothing installed); inputs reach it only as environment variables, never pasted into the shell
+command. Its tests run offline (`test_action.py`); it has not yet been run on GitHub's Windows
+runners.
 
 ## As an agent skill
 
@@ -206,11 +229,12 @@ legal finding, and not to crawl lists of other people's sites.
 **Untrusted page content.** The skill reads web pages that other people wrote, so a page could
 carry text aimed at an agent (indirect prompt injection); Snyk's audit on skills.sh flags this as
 W011, third-party content exposure. The checker never prints a page's body: only the address,
-counts, WCAG versions, dates it read, its own fixed notes, matched snippets of at most 100
-characters and (since 0.6.0, on a hub page only) at most five link addresses of at most 300
-characters. It never follows a link it finds. Since 2026-11-09 the skill also tells the agent to
-treat any page text as data, never as instructions, not to run commands, open further links or
-fill in forms because a page says so, and to report instruction-like text to the user as a quote.
+counts, WCAG versions, EN 301 549 edition numbers and dates it read, its own fixed notes, matched
+snippets of at most 100 characters and (since 0.6.0, on a hub page only) at most five link
+addresses of at most 300 characters. It never follows a link it finds. Since 2026-11-09 the skill
+also tells the agent to treat any page text as data, never as instructions, not to run commands,
+open further links or fill in forms because a page says so, and to report instruction-like text to
+the user as a quote.
 
 ## What it checks
 
@@ -257,6 +281,16 @@ AccessibilityStatement), gets the note `hub_page` and a line `statement link:` f
 saved file only absolute links count. These are the two strongest link rules of the UK council
 census's reader.
 
+**EN 301 549 editions (since 0.8.0).** When a page names EN 301 549 (or EN 301-549), the output
+gains a line `EN 301 549 editions named:` with each edition read, and the JSON gains
+`en301549_named`, `en301549_versions` and `en301549_highest` on every page read. An edition is read
+only when "V" or "version" comes right before its number, after "EN 301 549" and at most 25 other
+characters with no full stop or digit ("EN 301 549 V3.2.1 (2021-03)", "ETSI EN 301 549 v.2.1.2",
+"EN 301-549, version 3.2.1"), so a clause number such as "EN 301 549 clause 9.1.1.1" is never read
+as an edition. When the highest edition named is older than V3.2.1 (for example V2.1.2 (2018-08)
+or V1.1.2 (2015-04)), the note `older_en301549` says so. A statement on V3.2.1 gets no note: it is
+still the edition cited in the Official Journal, even though V4.1.1 is published.
+
 Limits: it reads visible text only (not PDFs, not text split across tags in the middle of a
 word), one page per address, and a filled-in template can still be wrong about the site. The UK
 rules follow the GOV.UK sample as published on 2026-11-08 and the Juniper template as seen on live
@@ -267,18 +301,29 @@ from") are not read; a planned date is left out only when "will be", "shall be",
 "must be", "to be" or "next" comes right before "reviewed", "updated", "prepared" and the like
 (since 0.7.0), so other wording for a plan can still be read as a review date; and a review date is what the statement says, not proof that
 anyone reviewed it. A short statement that names no WCAG version and no date but links to another
-statement (for example an app's) also gets `hub_page`; read it as "check the linked page too".
+statement (for example an app's) also gets `hub_page`; read it as "check the linked page too". An
+EN 301 549 edition is read only in the wording above: "EN 301 549:2018", a second edition listed
+after the first without its own "EN 301 549" ("EN 301 549 V2.1.2 and V3.2.1") and statements in
+other languages that put the edition before the standard's name are not read in full.
 
 ## Tests
 
 ```
-python -m unittest -v test_statement_template_check.py test_action.py test_hub_page.py test_planned_review.py
+python -m unittest -v test_statement_template_check.py test_action.py test_hub_page.py test_planned_review.py test_en301549.py
 ```
 
 Offline; no network is used.
 
 ## Changes
 
+- **0.8.0:** EN 301 549 editions. A page that names EN 301 549 gets a line `EN 301 549 editions
+  named:` and, in the JSON, `en301549_named`, `en301549_versions` and `en301549_highest`; when its
+  highest edition is older than V3.2.1 (2021-03), the edition cited in the EU's Official Journal
+  for the Web Accessibility Directive since 2021, it gets the note `older_en301549`. ETSI, CEN and
+  CENELEC published V4.1.1 (2026-09), whose web clause covers WCAG 2.2, on 2 September 2026. A
+  clause number is never read as an edition. Every placeholder rule, earlier note, input, output
+  and exit code is unchanged; the Action (`action_run` 0.8.0) passes the new note on as a notice.
+  New offline tests: `test_en301549.py`.
 - **0.7.0:** planned review dates. A date right after "will be", "shall be", "should be", "must
   be", "to be" or "next" ("It will be reviewed in March 2027", "is due to be updated on ...") is a
   planned review or publication, so it is no longer read as the statement's date; before, it could
