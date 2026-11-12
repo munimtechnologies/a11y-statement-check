@@ -9,7 +9,9 @@ fills them in, which WCAG versions the page names, the statement's own latest "l
 wording worth a second look. Since 0.6.0 it also notes when the page you gave it is probably not
 the statement at all but a page in front of it, and prints the address of the statement it links to.
 Since 0.8.0 it reports which editions of EN 301 549, the European standard for accessible ICT, a
-statement names, with a note when the highest one is older than V3.2.1.
+statement names, with a note when the highest one is older than V3.2.1. Since 0.9.0 it notes when a
+US page about HHS's Section 504 rule (hospitals, health centres and other recipients of HHS
+funding) still gives that rule's superseded web dates, May 11, 2026 or May 10, 2027.
 It knows US vendor templates, the fields and guidance notes of GOV.UK's sample accessibility
 statement for UK public sector websites (since 0.3.0) and the school statement template served on
 UK school websites built by Juniper Websites, formerly e4education (since 0.4.0).
@@ -77,6 +79,16 @@ edition cited in the EU's Official Journal for the Web Accessibility Directive (
 Decision (EU) 2021/1339, which withdrew V2.1.2 from 12 February 2022). The `older_en301549` note
 (since 0.8.0) flags a statement whose newest edition named is older than V3.2.1.
 
+In US health care, HHS's 2024 rule under Section 504 of the Rehabilitation Act (45 CFR 84.84)
+asks every recipient of HHS funding (hospitals, health centres, clinics, state health and human
+services agencies) to meet WCAG 2.1 Level AA on its websites and mobile apps. The rule first set
+May 11, 2026 (fifteen or more employees) and May 10, 2027 (fewer than fifteen); an HHS interim
+final rule published on 11 May 2026 (91 FR 25507) moved them to **May 11, 2027** and **May 10,
+2028** (45 CFR 84.84(b) as amended, read on eCFR on 2026-11-12). Pages written before that change
+still give the old dates. The `old_504_date` note (since 0.9.0) flags a page that names Section
+504 or HHS and gives an old date but neither new one, as the `old_title2_date` note does for the
+Justice Department's parallel ADA Title II change.
+
 ## Use it
 
 Python 3.8 or newer, standard library only, nothing to install:
@@ -93,8 +105,9 @@ python skills/accessibility-statement-check/statement_template_check.py --text d
 one second between requests. `--file` reads a saved HTML page. `--max-age-days` (default 365; 0
 turns it off) sets when a statement's latest date counts as old, and `--today` (YYYY-MM-DD) fixes
 the date it is measured from. Exit code 1: a template placeholder was found; 0: none found; 2: no
-page could be read. An old date, an older EN 301 549 edition or a hub page is a note only and never
-changes the exit code. That makes it usable in CI on a statement draft kept in a repository.
+page could be read. An old date, an older EN 301 549 edition, an old Section 504 date or a hub page
+is a note only and never changes the exit code. That makes it usable in CI on a statement draft
+kept in a repository.
 
 Example output for an unfinished template (an illustrative page, not a real site):
 
@@ -149,6 +162,18 @@ statement.txt
   verdict: no template placeholder found
 ```
 
+And for a US health centre's page that still gives the first Section 504 date (an illustrative
+text file, the one in `test_section504.py`):
+
+```
+statement.txt
+  read: 339 characters of text
+  WCAG versions named: 2.1
+  statement date: none found
+  NOTE old_504_date: names May 11, 2026, a web compliance date of HHS's 2024 Section 504 rule (45 CFR 84.84), and neither later date; an HHS interim final rule published on 2026-05-11 (91 FR 25507) moved the dates to May 11, 2027 (recipients with fifteen or more employees) and May 10, 2028 (fewer than fifteen), so check which date the page means
+  verdict: no template placeholder found
+```
+
 ## In CI (GitHub Action, since v0.2.0)
 
 Keep your statement draft in the repository and let a pull request fail while it still has a
@@ -162,7 +187,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: munimtechnologies/a11y-statement-check@v0.8.0
+      - uses: munimtechnologies/a11y-statement-check@v0.9.0
         with:
           text-files: |
             docs/accessibility*.md
@@ -183,7 +208,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - id: statement
-        uses: munimtechnologies/a11y-statement-check@v0.8.0
+        uses: munimtechnologies/a11y-statement-check@v0.9.0
         with:
           urls: https://www.example.gov.uk/accessibility-statement
       - if: steps.statement.outputs.old-statements != '0'
@@ -206,11 +231,11 @@ Outputs: `placeholder-pages` (statements read that still carry a placeholder), `
 `unread` and `old-statements` (statements read whose latest stated date is more than
 `max-age-days` old). Each placeholder becomes an annotation on the file and line where it was
 found, other notes (such as a statement that names only WCAG 2.0, an old date, an older EN 301 549
-edition or a hub page) become notices, and the job summary gets a table of every statement checked
-with its date. The step runs `action_run.py` with the runner's own Python 3 (standard library only,
-nothing installed); inputs reach it only as environment variables, never pasted into the shell
-command. Its tests run offline (`test_action.py`); it has not yet been run on GitHub's Windows
-runners.
+edition, an old Section 504 date or a hub page) become notices, and the job summary gets a table
+of every statement checked with its date. The step runs `action_run.py` with the runner's own
+Python 3 (standard library only, nothing installed); inputs reach it only as environment
+variables, never pasted into the shell command. Its tests run offline (`test_action.py`); it has
+not yet been run on GitHub's Windows runners.
 
 ## As an agent skill
 
@@ -251,14 +276,14 @@ the user as a quote.
 Notes (never counted in the exit code): a bracketed phrase that may be a placeholder (Cloudflare's
 hidden "[email protected]" is skipped), WCAG 2.0 named alone, WCAG mentioned without a version or
 not at all, April 24, 2026 named without a later Title II date (an interim final rule of
-2026-04-20 moved the dates to April 26, 2027 and April 26, 2028), a 2017 "Accessibility Statement
-Generator" credit, and a vendor's stock "We work to comply with Section 508 as well as ..."
-sentence. A page that uses GOV.UK's legally required compliance sentence ("This website is fully /
-partially / not compliant with the Web Content Accessibility Guidelines ...") gets the UK note
-`uk_older_wcag` when its highest WCAG version is 2.0 or 2.1 (GOV.UK's current sample names WCAG 2.2
-AA), and none of the US ADA notes. Template wording `juniper_school` marks the Juniper template's
-closing sentence ("... values diversity and inclusion and is committed to providing an accessible
-online experience ..."), filled in or not.
+2026-04-20 moved the dates to April 26, 2027 and April 26, 2028), an old Section 504 date (since
+0.9.0, below), a 2017 "Accessibility Statement Generator" credit, and a vendor's stock "We work to
+comply with Section 508 as well as ..." sentence. A page that uses GOV.UK's legally required
+compliance sentence ("This website is fully / partially / not compliant with the Web Content
+Accessibility Guidelines ...") gets the UK note `uk_older_wcag` when its highest WCAG version is
+2.0 or 2.1 (GOV.UK's current sample names WCAG 2.2 AA), and none of the US ADA notes. Template
+wording `juniper_school` marks the Juniper template's closing sentence ("... values diversity and
+inclusion and is committed to providing an accessible online experience ..."), filled in or not.
 
 **Statement dates (since 0.5.0).** The checker reads the dates a statement gives after "last
 reviewed / updated / revised", "reviewed / updated / revised on / in" and "prepared / published /
@@ -291,6 +316,15 @@ as an edition. When the highest edition named is older than V3.2.1 (for example 
 or V1.1.2 (2015-04)), the note `older_en301549` says so. A statement on V3.2.1 gets no note: it is
 still the edition cited in the Official Journal, even though V4.1.1 is published.
 
+**Section 504 dates (since 0.9.0).** When a page names Section 504 ("Section 504", "Sec. 504",
+"§ 504"), 45 CFR part 84 or the US Department of Health and Human Services ("HHS"), and gives May
+11, 2026 or May 10, 2027 but neither May 11, 2027 nor May 10, 2028, it gets the note
+`old_504_date`. Dates are read as "May 11, 2026", "May 11th, 2026", "11 May 2026", "05/11/2026",
+"5/11/26" and "2026-05-11" (numeric dates month first, as on US pages). The JSON gains
+`section_504_named` and `hhs504_dates` (each of the four dates, given or not) on every page read.
+A page that gives an old date and a new one (for example to explain the change) gets no note, and
+a page that names none of Section 504, 45 CFR part 84 or HHS never does, whatever dates it gives.
+
 Limits: it reads visible text only (not PDFs, not text split across tags in the middle of a
 word), one page per address, and a filled-in template can still be wrong about the site. The UK
 rules follow the GOV.UK sample as published on 2026-11-08 and the Juniper template as seen on live
@@ -304,18 +338,29 @@ anyone reviewed it. A short statement that names no WCAG version and no date but
 statement (for example an app's) also gets `hub_page`; read it as "check the linked page too". An
 EN 301 549 edition is read only in the wording above: "EN 301 549:2018", a second edition listed
 after the first without its own "EN 301 549" ("EN 301 549 V2.1.2 and V3.2.1") and statements in
-other languages that put the edition before the standard's name are not read in full.
+other languages that put the edition before the standard's name are not read in full. The Section
+504 note does not know whether a page's owner receives HHS funding or how many people it employs,
+and a page may give May 11, 2026 for another reason; it never reads "May 2026" without a day.
+HHS has said it may propose further changes to the 2024 rule, so check the current 45 CFR 84.84
+before relying on any date.
 
 ## Tests
 
 ```
-python -m unittest -v test_statement_template_check.py test_action.py test_hub_page.py test_planned_review.py test_en301549.py
+python -m unittest -v test_statement_template_check.py test_action.py test_hub_page.py test_planned_review.py test_en301549.py test_section504.py
 ```
 
 Offline; no network is used.
 
 ## Changes
 
+- **0.9.0:** Section 504 dates. A page that names Section 504, 45 CFR part 84 or HHS and gives May
+  11, 2026 or May 10, 2027 (the web dates first set by HHS's 2024 Section 504 rule, 45 CFR 84.84)
+  but neither May 11, 2027 nor May 10, 2028 (the dates since HHS's interim final rule published on
+  11 May 2026, 91 FR 25507) gets the note `old_504_date`; the JSON gains `section_504_named` and
+  `hhs504_dates`. Every placeholder rule, earlier note, input, output and exit code is unchanged;
+  the Action (`action_run` 0.9.0) passes the new note on as a notice. New offline tests:
+  `test_section504.py`.
 - **0.8.0:** EN 301 549 editions. A page that names EN 301 549 gets a line `EN 301 549 editions
   named:` and, in the JSON, `en301549_named`, `en301549_versions` and `en301549_highest`; when its
   highest edition is older than V3.2.1 (2021-03), the edition cited in the EU's Official Journal

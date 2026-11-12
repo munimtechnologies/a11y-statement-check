@@ -1,4 +1,4 @@
-"""statement_template_check 0.8.0: is a website's accessibility statement still an unfinished template?
+"""statement_template_check 0.9.0: is a website's accessibility statement still an unfinished template?
 
 Reads one accessibility statement (a URL, a saved HTML file or a plain-text file) and reports:
 
@@ -42,6 +42,12 @@ Reads one accessibility statement (a URL, a saved HTML file or a plain-text file
     in the EU's Official Journal for the Web Accessibility Directive since 2021 (Implementing
     Decision (EU) 2021/1339). ETSI, CEN and CENELEC published V4.1.1 (2026-09), whose web clause
     covers WCAG 2.2, on 2 September 2026.
+  * since 0.9.0, a note (old_504_date) when a page that names Section 504, 45 CFR part 84 or the
+    US Department of Health and Human Services (HHS) gives May 11, 2026 or May 10, 2027, the web
+    compliance dates of HHS's 2024 Section 504 rule (45 CFR 84.84(b)), and neither later date: an
+    HHS interim final rule published on 11 May 2026 (91 FR 25507) moved them to May 11, 2027
+    (recipients with fifteen or more employees) and May 10, 2028 (fewer than fifteen). Hospitals,
+    health centres and other recipients of HHS funding fall under that rule.
 
 With --site it asks a site for the three stock addresses where those censuses found most
 unfinished templates (/153/Accessibility, /accessibility_statement/index.php and
@@ -50,8 +56,8 @@ never follows a link it finds on a page.
 
 It reads what a statement says, not whether the website is accessible, and it is not legal
 advice. Exit code: 1 if any page read has a template placeholder, 0 if none does, 2 if no page
-could be read (an old date, an older EN 301 549 edition or a hub page is a note only and never
-changes the exit code).
+could be read (an old date, an older EN 301 549 edition, an old Section 504 date or a hub page is
+a note only and never changes the exit code).
 Standard library only. Apache-2.0. Made by MV2 of Munim, Inc. with AI agents.
 """
 
@@ -68,7 +74,7 @@ import urllib.parse
 import urllib.request
 import urllib.robotparser
 
-__version__ = "0.8.0"
+__version__ = "0.9.0"
 
 UA = ("statement-template-check/%s (MV2, Munim, Inc.; mv2@munimtech.com; reads public pages only)"
       % __version__)
@@ -198,6 +204,30 @@ DATE_2028_RE = re.compile(r"\bApr(?:il|\.)?\s+26(?:th)?,?\s+2028\b|\b26\s+April,
                           r"\b0?4/26/(?:20)?28\b|\b2028-04-26\b", re.I)
 GENERATOR_RE = re.compile(r"\bAccessibility\s+Statement\s+Generator\b", re.I)
 
+
+# HHS's Section 504 rule (since 0.9.0). The rule of 9 May 2024 (89 FR 40193; 45 CFR 84.84(b))
+# asked recipients of HHS funding to meet WCAG 2.1 Level AA on the web and in mobile apps by May
+# 11, 2026 (fifteen or more employees) and May 10, 2027 (fewer than fifteen). An interim final
+# rule published on 11 May 2026 (91 FR 25507) moved both dates by a year: May 11, 2027 and May
+# 10, 2028 (45 CFR 84.84(b)(1) and (2) as amended; read on eCFR on 2026-11-12). The note is given
+# only when the page also names Section 504, 45 CFR part 84 or HHS, so a date on a page about
+# something else is never read as one of these.
+def may_date_re(day, year):
+    """May <day>, <year> as "May 11, 2026", "May 11th 2026", "11 May 2026", "05/11/2026",
+    "5/11/26" or "2026-05-11" (month first in the numeric form, as on US pages)."""
+    return re.compile(r"\bMay\.?\s+%d(?:th)?,?\s+%d\b|\b%d(?:th)?\s+(?:of\s+)?May,?\s+%d\b|"
+                      r"\b0?5/%d/(?:20)?%02d\b|\b%d-05-%d\b"
+                      % (day, year, day, year, day, year % 100, year, day), re.I)
+
+
+SECTION_504_RE = re.compile(r"\bSec(?:tion|\.)\s*504\b|\u00a7\s*504\b|"
+                            r"\b45\s*C\.?\s*F\.?\s*R\.?\s*(?:Part\s*|\u00a7+\s*)?84\b|"
+                            r"\bHHS\b|\bHealth\s+(?:and|&)\s+Human\s+Services\b", re.I)
+HHS504_DATES = (("2026-05-11", may_date_re(11, 2026)), ("2027-05-10", may_date_re(10, 2027)),
+                ("2027-05-11", may_date_re(11, 2027)), ("2028-05-10", may_date_re(10, 2028)))
+HHS504_OLD = (("2026-05-11", "May 11, 2026"), ("2027-05-10", "May 10, 2027"))
+HHS504_NEW = ("2027-05-11", "2028-05-10")
+
 # EN 301 549, the European standard for accessible ICT (since 0.8.0). An edition is read only when
 # "V" or "version" comes right before its number, after "EN 301 549" (or "EN 301-549") and at most
 # 25 other characters with no full stop or digit in them: "EN 301 549 V3.2.1 (2021-03)", "ETSI EN
@@ -261,6 +291,11 @@ NOTES = {
                        "later date; an interim final rule of 2026-04-20 moved the dates to April "
                        "26, 2027 (50,000 or more people) and April 26, 2028 (under 50,000, and "
                        "special districts)",
+    "old_504_date": "names %s, a web compliance date of HHS's 2024 Section 504 rule (45 CFR "
+                    "84.84), and neither later date; an HHS interim final rule published on "
+                    "2026-05-11 (91 FR 25507) moved the dates to May 11, 2027 (recipients with "
+                    "fifteen or more employees) and May 10, 2028 (fewer than fifteen), so check "
+                    "which date the page means",
     "generator": "keeps the 'Accessibility Statement Generator' credit line of a 2017 template",
     "stock_508": "keeps a vendor's stock sentence 'We work to comply with Section 508 as well "
                  "as ...'",
@@ -276,6 +311,16 @@ NOTES = {
                 "the accessibility statement itself (%s); this page probably sits in front of the "
                 "statement, so check that address too (this tool never follows it by itself)",
 }
+
+
+# ---------------------------------------------------------------- HHS Section 504 dates
+
+def hhs504(text):
+    """(named, dates): whether the text names Section 504, 45 CFR part 84 or HHS, and for each of
+    the four Section 504 web dates (ISO keys) whether the text gives it. Since 0.9.0."""
+    flat = " ".join(text.split())
+    return (bool(SECTION_504_RE.search(flat)),
+            {key: bool(rx.search(flat)) for key, rx in HHS504_DATES})
 
 
 # ---------------------------------------------------------------- EN 301 549 editions
@@ -375,6 +420,7 @@ def check_text(text, today=None, max_age_days=MAX_AGE_DAYS):
     dates = {"2026-04-24": bool(DATE_2026_RE.search(text)),
              "2027-04-26": bool(DATE_2027_RE.search(text)),
              "2028-04-26": bool(DATE_2028_RE.search(text))}
+    named_504, dates_504 = hhs504(text)
     review, prepared, stated, source = statement_dates(text)
     en_named, en_versions = en301549_versions(text)
     en_highest = en_versions[-1] if en_versions else ""
@@ -401,6 +447,9 @@ def check_text(text, today=None, max_age_days=MAX_AGE_DAYS):
     if (not uk and dates["2026-04-24"]
             and not (dates["2027-04-26"] or dates["2028-04-26"])):
         note("old_title2_date")
+    old_504 = [words for key, words in HHS504_OLD if dates_504[key]]
+    if named_504 and old_504 and not any(dates_504[key] for key in HHS504_NEW):
+        note("old_504_date", " and ".join(old_504))
     if GENERATOR_RE.search(text):
         note("generator")
     if "stock_508" in templates:
@@ -414,6 +463,7 @@ def check_text(text, today=None, max_age_days=MAX_AGE_DAYS):
             "possible_placeholder": possible, "templates": templates,
             "wcag_named": wcag_named, "wcag_versions": sorted(versions),
             "highest": highest, "dates": dates,
+            "section_504_named": named_504, "hhs504_dates": dates_504,
             "review_date": review, "prepared_date": prepared, "statement_date": stated,
             "date_source": source, "statement_age_days": age,
             "en301549_named": en_named, "en301549_versions": en_versions,
