@@ -1,4 +1,4 @@
-"""statement_template_check 0.10.1: is a website's accessibility statement still an unfinished template?
+"""statement_template_check 0.10.2: is a website's accessibility statement still an unfinished template?
 
 Reads one accessibility statement (a URL, a saved HTML file or a plain-text file) and reports:
 
@@ -57,6 +57,9 @@ Reads one accessibility statement (a URL, a saved HTML file or a plain-text file
     old_title2_date (the JSON's dates still report every April 24, 2026). MV2's census of US
     special districts' accessibility pages (November 2026) found a statement "Last updated: April
     24, 2026" read as the old Title II date.
+  * since 0.10.2, the same holds for a "last edited" or "last modified" date ("Last Edited:
+    April 24, 2026"), a wording MV2's census of US cities and counties of 50,000 or more
+    found. Such a date is not read as the statement's own date.
 
 With --site it asks a site for the three stock addresses where those censuses found most
 unfinished templates (/153/Accessibility, /accessibility_statement/index.php and
@@ -83,7 +86,7 @@ import urllib.parse
 import urllib.request
 import urllib.robotparser
 
-__version__ = "0.10.1"
+__version__ = "0.10.2"
 
 UA = ("statement-template-check/%s (MV2, Munim, Inc.; mv2@munimtech.com; reads public pages only)"
       % __version__)
@@ -412,13 +415,19 @@ def statement_dates(text):
     return iso(r), iso(p), iso(s), src
 
 
+# A "last edited / modified" date (since 0.10.2): the day a page was edited, so an April 24,
+# 2026 inside one is not the Title II date either. It is not read as a statement date.
+EDITED_RE = re.compile(r"\blast\s+(?:edited|modified)\b[^.\d]{0,30}?" + DATE, re.I)
+
+
 def title2_2026(text):
     """Whether the text gives April 24, 2026 other than as the statement's own date (since
     0.10.1): an April 24, 2026 that lies inside a 'last reviewed / updated' or 'prepared /
     published on' date phrase ("Last updated: April 24, 2026") is the day the statement was
-    written or reviewed, not the first ADA Title II compliance date, so it does not count."""
+    written or reviewed, not the first ADA Title II compliance date, so it does not count. Since
+    0.10.2 neither does one inside a 'last edited / modified' phrase."""
     flat = " ".join(text.split())
-    own = [m.span() for rx in (REVIEW_RE, PREPARED_RE) for m in rx.finditer(flat)]
+    own = [m.span() for rx in (REVIEW_RE, PREPARED_RE, EDITED_RE) for m in rx.finditer(flat)]
     return any(not any(s <= m.start() and m.end() <= e for s, e in own)
                for m in DATE_2026_RE.finditer(flat))
 

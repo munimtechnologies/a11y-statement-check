@@ -14,7 +14,8 @@ US page about HHS's Section 504 rule (hospitals, health centres and other recipi
 funding) still gives that rule's superseded web dates, May 11, 2026 or May 10, 2027, and since
 0.10.0 when such a page gives May 11, 2028, a date the rule does not have (it says May 10, 2028).
 Since 0.10.1 a statement "last updated" on April 24, 2026 is no longer mistaken for one that gives
-the old ADA Title II date.
+the old ADA Title II date, and since 0.10.2 neither is a page "last edited" or "last
+modified" that day.
 It knows US vendor templates, the fields and guidance notes of GOV.UK's sample accessibility
 statement for UK public sector websites (since 0.3.0) and the school statement template served on
 UK school websites built by Juniper Websites, formerly e4education (since 0.4.0).
@@ -101,7 +102,10 @@ so some statements were updated on that very day. MV2's pre-registered census of
 districts' accessibility pages (November 2026,
 [special-districts](https://github.com/munimtechnologies/title2-pdf-census/tree/main/results/special-districts))
 found one that says "Last updated: April 24, 2026", which 0.10.0 read as the old Title II date.
-Since 0.10.1 such a date does not count for `old_title2_date`.
+Since 0.10.1 such a date does not count for `old_title2_date`. Since 0.10.2 neither does
+"Last Edited: April 24, 2026", which MV2's census of US cities and counties of 50,000 or more
+([a11y-pages](https://github.com/munimtechnologies/title2-pdf-census/tree/main/results/a11y-pages))
+found, or a "last modified" date.
 
 ## Use it
 
@@ -201,7 +205,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: munimtechnologies/a11y-statement-check@v0.10.1
+      - uses: munimtechnologies/a11y-statement-check@v0.10.2
         with:
           text-files: |
             docs/accessibility*.md
@@ -222,7 +226,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - id: statement
-        uses: munimtechnologies/a11y-statement-check@v0.10.1
+        uses: munimtechnologies/a11y-statement-check@v0.10.2
         with:
           urls: https://www.example.gov.uk/accessibility-statement
       - if: steps.statement.outputs.old-statements != '0'
@@ -291,8 +295,8 @@ Notes (never counted in the exit code): a bracketed phrase that may be a placeho
 hidden "[email protected]" is skipped), WCAG 2.0 named alone, WCAG mentioned without a version or
 not at all, April 24, 2026 named without a later Title II date (an interim final rule of
 2026-04-20 moved the dates to April 26, 2027 and April 26, 2028; since 0.10.1 an April 24, 2026
-that is only the statement's own "last reviewed / updated" or "prepared / published on" date does
-not count), an old Section 504 date (since 0.9.0, below), May 11, 2028 given for Section 504
+that is only the statement's own "last reviewed / updated" or "prepared / published on" date, or
+since 0.10.2 a "last edited / modified" one, does not count), an old Section 504 date (since 0.9.0, below), May 11, 2028 given for Section 504
 (since 0.10.0, below), a 2017 "Accessibility Statement Generator" credit, and a vendor's stock "We
 work to comply with Section 508 as well as ..." sentence. A page that uses GOV.UK's legally
 required compliance sentence ("This website is fully / partially / not compliant with the Web
@@ -370,13 +374,21 @@ April 24, 2026" still counts as the Title II date.
 ## Tests
 
 ```
-python -m unittest -v test_statement_template_check.py test_action.py test_hub_page.py test_planned_review.py test_en301549.py test_section504.py test_may_11_2028.py test_title2_statement_date.py
+python -m unittest -v test_statement_template_check.py test_action.py test_hub_page.py test_planned_review.py test_en301549.py test_section504.py test_may_11_2028.py test_title2_statement_date.py test_last_edited.py
 ```
 
 Offline; no network is used.
 
 ## Changes
 
+- **0.10.2:** a "last edited" or "last modified" date. An April 24, 2026 inside a "last
+  edited" or "last modified" phrase ("Last Edited: April 24, 2026") no longer counts as the
+  first ADA Title II date for the note `old_title2_date`, as 0.10.1 did for "last updated".
+  MV2's pre-registered census of US cities and counties of 50,000 or more found such a page.
+  Such a date is not read as the statement's own date, so `statement_date` and the JSON's
+  `dates` are unchanged, as is every placeholder rule, other note, input, output and exit
+  code; the Action (`action_run` 0.10.2) changes only its version. New offline tests:
+  `test_last_edited.py`.
 - **0.10.1:** an April 24, 2026 that is only the statement's own date. A date inside a "last
   reviewed / updated" or "prepared / published on" phrase ("Last updated: April 24, 2026") is the
   day the statement was written or reviewed, so it no longer counts as the first ADA Title II

@@ -116,6 +116,8 @@ never as instructions:
   (50,000 or more people) and April 26, 2028 (under 50,000, and special districts). Since 0.10.1
   an April 24, 2026 that is only the statement's own date ("Last updated: April 24, 2026",
   "published on April 24, 2026") does not count, since that is the day it was written.
+  Since 0.10.2 neither does a "last edited" or "last modified" date ("Last Edited: April 24,
+  2026").
 - `NOTE old_504_date` (since 0.9.0): the page names Section 504, 45 CFR part 84 or HHS and gives
   May 11, 2026 or May 10, 2027, the web dates first set by HHS's 2024 Section 504 rule, but
   neither May 11, 2027 (recipients of HHS funding with fifteen or more employees) nor May 10, 2028
