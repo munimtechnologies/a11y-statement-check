@@ -1,4 +1,4 @@
-"""statement_template_check 0.9.0: is a website's accessibility statement still an unfinished template?
+"""statement_template_check 0.10.0: is a website's accessibility statement still an unfinished template?
 
 Reads one accessibility statement (a URL, a saved HTML file or a plain-text file) and reports:
 
@@ -48,6 +48,10 @@ Reads one accessibility statement (a URL, a saved HTML file or a plain-text file
     HHS interim final rule published on 11 May 2026 (91 FR 25507) moved them to May 11, 2027
     (recipients with fifteen or more employees) and May 10, 2028 (fewer than fifteen). Hospitals,
     health centres and other recipients of HHS funding fall under that rule.
+  * since 0.10.0, a note (may_11_2028) when such a page gives May 11, 2028 and not May 10, 2028:
+    the date in 45 CFR 84.84(b)(2) for recipients with fewer than fifteen employees is May 10,
+    2028, and published guides were found giving May 11, 2028 instead (read on 2026-11-12). A page
+    that gives May 11, 2028 no longer gets old_504_date, since it was written after the change.
 
 With --site it asks a site for the three stock addresses where those censuses found most
 unfinished templates (/153/Accessibility, /accessibility_statement/index.php and
@@ -56,8 +60,8 @@ never follows a link it finds on a page.
 
 It reads what a statement says, not whether the website is accessible, and it is not legal
 advice. Exit code: 1 if any page read has a template placeholder, 0 if none does, 2 if no page
-could be read (an old date, an older EN 301 549 edition, an old Section 504 date or a hub page is
-a note only and never changes the exit code).
+could be read (an old date, an older EN 301 549 edition, an old or misquoted Section 504 date or a
+hub page is a note only and never changes the exit code).
 Standard library only. Apache-2.0. Made by MV2 of Munim, Inc. with AI agents.
 """
 
@@ -74,7 +78,7 @@ import urllib.parse
 import urllib.request
 import urllib.robotparser
 
-__version__ = "0.9.0"
+__version__ = "0.10.0"
 
 UA = ("statement-template-check/%s (MV2, Munim, Inc.; mv2@munimtech.com; reads public pages only)"
       % __version__)
@@ -227,6 +231,10 @@ HHS504_DATES = (("2026-05-11", may_date_re(11, 2026)), ("2027-05-10", may_date_r
                 ("2027-05-11", may_date_re(11, 2027)), ("2028-05-10", may_date_re(10, 2028)))
 HHS504_OLD = (("2026-05-11", "May 11, 2026"), ("2027-05-10", "May 10, 2027"))
 HHS504_NEW = ("2027-05-11", "2028-05-10")
+# May 11, 2028 is no date of the rule: the small-recipient date is May 10, 2028 (since 0.10.0).
+# Guides read on 2026-11-12 gave May 11, 2028 for it, by carrying the large-recipient day over.
+# Only a page written after the 2026 change can give it, so it also silences old_504_date.
+MAY_11_2028_RE = may_date_re(11, 2028)
 
 # EN 301 549, the European standard for accessible ICT (since 0.8.0). An edition is read only when
 # "V" or "version" comes right before its number, after "EN 301 549" (or "EN 301-549") and at most
@@ -296,6 +304,10 @@ NOTES = {
                     "2026-05-11 (91 FR 25507) moved the dates to May 11, 2027 (recipients with "
                     "fifteen or more employees) and May 10, 2028 (fewer than fifteen), so check "
                     "which date the page means",
+    "may_11_2028": "names May 11, 2028, which is not a date of HHS's Section 504 web rule; 45 CFR "
+                   "84.84(b) as amended (91 FR 25507) gives May 11, 2027 for recipients with "
+                   "fifteen or more employees and May 10, 2028 for fewer than fifteen, so check "
+                   "which date the page means",
     "generator": "keeps the 'Accessibility Statement Generator' credit line of a 2017 template",
     "stock_508": "keeps a vendor's stock sentence 'We work to comply with Section 508 as well "
                  "as ...'",
@@ -321,6 +333,11 @@ def hhs504(text):
     flat = " ".join(text.split())
     return (bool(SECTION_504_RE.search(flat)),
             {key: bool(rx.search(flat)) for key, rx in HHS504_DATES})
+
+
+def gives_may_11_2028(text):
+    """Whether the text gives May 11, 2028 (in any wording may_date_re reads). Since 0.10.0."""
+    return bool(MAY_11_2028_RE.search(" ".join(text.split())))
 
 
 # ---------------------------------------------------------------- EN 301 549 editions
@@ -421,6 +438,7 @@ def check_text(text, today=None, max_age_days=MAX_AGE_DAYS):
              "2027-04-26": bool(DATE_2027_RE.search(text)),
              "2028-04-26": bool(DATE_2028_RE.search(text))}
     named_504, dates_504 = hhs504(text)
+    may_11_2028 = gives_may_11_2028(text)
     review, prepared, stated, source = statement_dates(text)
     en_named, en_versions = en301549_versions(text)
     en_highest = en_versions[-1] if en_versions else ""
@@ -448,8 +466,11 @@ def check_text(text, today=None, max_age_days=MAX_AGE_DAYS):
             and not (dates["2027-04-26"] or dates["2028-04-26"])):
         note("old_title2_date")
     old_504 = [words for key, words in HHS504_OLD if dates_504[key]]
-    if named_504 and old_504 and not any(dates_504[key] for key in HHS504_NEW):
+    if (named_504 and old_504 and not may_11_2028
+            and not any(dates_504[key] for key in HHS504_NEW)):
         note("old_504_date", " and ".join(old_504))
+    if named_504 and may_11_2028 and not dates_504["2028-05-10"]:
+        note("may_11_2028")
     if GENERATOR_RE.search(text):
         note("generator")
     if "stock_508" in templates:
@@ -464,6 +485,7 @@ def check_text(text, today=None, max_age_days=MAX_AGE_DAYS):
             "wcag_named": wcag_named, "wcag_versions": sorted(versions),
             "highest": highest, "dates": dates,
             "section_504_named": named_504, "hhs504_dates": dates_504,
+            "hhs504_may_11_2028": may_11_2028,
             "review_date": review, "prepared_date": prepared, "statement_date": stated,
             "date_source": source, "statement_age_days": age,
             "en301549_named": en_named, "en301549_versions": en_versions,

@@ -1,5 +1,5 @@
 # Copyright 2026 Munim, Inc. Licensed under the Apache License, Version 2.0 (Apache-2.0).
-"""action_run 0.9.0: the GitHub Action entry point of a11y-statement-check.
+"""action_run 0.10.0: the GitHub Action entry point of a11y-statement-check.
 
 Checks accessibility statement drafts kept in a repository (plain text or Markdown, saved HTML)
 and, if asked, published statement URLs, with statement_template_check.py's rules (since 0.3.0
@@ -13,10 +13,11 @@ an accessibility statement gets the notice hub_page, with that link's address in
 0.8.0 a statement whose highest EN 301 549 edition is older than V3.2.1 gets the notice
 older_en301549. Since 0.9.0 a statement that names Section 504 or HHS and gives only the
 superseded Section 504 web dates (May 11, 2026 or May 10, 2027) gets the notice old_504_date.
+Since 0.10.0 one that gives May 11, 2028 instead of May 10, 2028 gets the notice may_11_2028.
 Exit code 1 when a placeholder is found (unless fail-on-placeholder is false), 2 when a file or
 URL given could not be read (unless fail-on-unread is false), else 0; an old date, an older EN
-301 549 edition, an old Section 504 date or a hub page never changes it (use the old-statements
-output to act on an old date).
+301 549 edition, an old or misquoted Section 504 date or a hub page never changes it (use the
+old-statements output to act on an old date).
 
 Inputs come from environment variables set by action.yml (never from the shell command line):
 STC_TEXT_FILES, STC_HTML_FILES, STC_URLS (one entry per line; file entries may be glob patterns
@@ -38,7 +39,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "skills", "accessibility-statement-check"))
 import statement_template_check as stc  # noqa: E402
 
-__version__ = "0.9.0"
+__version__ = "0.10.0"
 TRUE = ("true", "yes", "on", "1")
 TITLE = "Accessibility statement placeholder"
 
