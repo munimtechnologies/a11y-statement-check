@@ -13,6 +13,8 @@ statement names, with a note when the highest one is older than V3.2.1. Since 0.
 US page about HHS's Section 504 rule (hospitals, health centres and other recipients of HHS
 funding) still gives that rule's superseded web dates, May 11, 2026 or May 10, 2027, and since
 0.10.0 when such a page gives May 11, 2028, a date the rule does not have (it says May 10, 2028).
+Since 0.10.1 a statement "last updated" on April 24, 2026 is no longer mistaken for one that gives
+the old ADA Title II date.
 It knows US vendor templates, the fields and guidance notes of GOV.UK's sample accessibility
 statement for UK public sector websites (since 0.3.0) and the school statement template served on
 UK school websites built by Juniper Websites, formerly e4education (since 0.4.0).
@@ -93,6 +95,13 @@ second date wrong: at least two published guides read on 2026-11-12, a vendor's 
 law firm's client advisory, give **May 11, 2028** for recipients with fewer than fifteen
 employees, carrying over the day of the larger recipients' date. The 0.9.0 note missed both,
 since each also gives May 11, 2027. The `may_11_2028` note (since 0.10.0) flags that date.
+
+April 24, 2026 was the first ADA Title II compliance date before the Justice Department moved it,
+so some statements were updated on that very day. MV2's pre-registered census of US special
+districts' accessibility pages (November 2026,
+[special-districts](https://github.com/munimtechnologies/title2-pdf-census/tree/main/results/special-districts))
+found one that says "Last updated: April 24, 2026", which 0.10.0 read as the old Title II date.
+Since 0.10.1 such a date does not count for `old_title2_date`.
 
 ## Use it
 
@@ -192,7 +201,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: munimtechnologies/a11y-statement-check@v0.10.0
+      - uses: munimtechnologies/a11y-statement-check@v0.10.1
         with:
           text-files: |
             docs/accessibility*.md
@@ -213,7 +222,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - id: statement
-        uses: munimtechnologies/a11y-statement-check@v0.10.0
+        uses: munimtechnologies/a11y-statement-check@v0.10.1
         with:
           urls: https://www.example.gov.uk/accessibility-statement
       - if: steps.statement.outputs.old-statements != '0'
@@ -281,15 +290,17 @@ the user as a quote.
 Notes (never counted in the exit code): a bracketed phrase that may be a placeholder (Cloudflare's
 hidden "[email protected]" is skipped), WCAG 2.0 named alone, WCAG mentioned without a version or
 not at all, April 24, 2026 named without a later Title II date (an interim final rule of
-2026-04-20 moved the dates to April 26, 2027 and April 26, 2028), an old Section 504 date (since
-0.9.0, below), May 11, 2028 given for Section 504 (since 0.10.0, below), a 2017 "Accessibility
-Statement Generator" credit, and a vendor's stock "We work to comply with Section 508 as well as
-..." sentence. A page that uses GOV.UK's legally required compliance sentence ("This website is
-fully / partially / not compliant with the Web Content Accessibility Guidelines ...") gets the UK
-note `uk_older_wcag` when its highest WCAG version is 2.0 or 2.1 (GOV.UK's current sample names
-WCAG 2.2 AA), and none of the US ADA notes. Template wording `juniper_school` marks the Juniper
-template's closing sentence ("... values diversity and inclusion and is committed to providing an
-accessible online experience ..."), filled in or not.
+2026-04-20 moved the dates to April 26, 2027 and April 26, 2028; since 0.10.1 an April 24, 2026
+that is only the statement's own "last reviewed / updated" or "prepared / published on" date does
+not count), an old Section 504 date (since 0.9.0, below), May 11, 2028 given for Section 504
+(since 0.10.0, below), a 2017 "Accessibility Statement Generator" credit, and a vendor's stock "We
+work to comply with Section 508 as well as ..." sentence. A page that uses GOV.UK's legally
+required compliance sentence ("This website is fully / partially / not compliant with the Web
+Content Accessibility Guidelines ...") gets the UK note `uk_older_wcag` when its highest WCAG
+version is 2.0 or 2.1 (GOV.UK's current sample names WCAG 2.2 AA), and none of the US ADA notes.
+Template wording `juniper_school` marks the Juniper template's closing sentence ("... values
+diversity and inclusion and is committed to providing an accessible online experience ..."),
+filled in or not.
 
 **Statement dates (since 0.5.0).** The checker reads the dates a statement gives after "last
 reviewed / updated / revised", "reviewed / updated / revised on / in" and "prepared / published /
@@ -352,18 +363,28 @@ other languages that put the edition before the standard's name are not read in 
 504 notes do not know whether a page's owner receives HHS funding or how many people it employs,
 and a page may give May 11, 2026 or May 11, 2028 for another reason; they never read "May 2026"
 without a day. HHS has said it may propose further changes to the 2024 rule, so check the current
-45 CFR 84.84 before relying on any date.
+45 CFR 84.84 before relying on any date. An April 24, 2026 is set aside as the statement's own date
+only in the date wording above ("Last updated: April 24, 2026"); "Updated April 24, 2026" or "Date:
+April 24, 2026" still counts as the Title II date.
 
 ## Tests
 
 ```
-python -m unittest -v test_statement_template_check.py test_action.py test_hub_page.py test_planned_review.py test_en301549.py test_section504.py test_may_11_2028.py
+python -m unittest -v test_statement_template_check.py test_action.py test_hub_page.py test_planned_review.py test_en301549.py test_section504.py test_may_11_2028.py test_title2_statement_date.py
 ```
 
 Offline; no network is used.
 
 ## Changes
 
+- **0.10.1:** an April 24, 2026 that is only the statement's own date. A date inside a "last
+  reviewed / updated" or "prepared / published on" phrase ("Last updated: April 24, 2026") is the
+  day the statement was written or reviewed, so it no longer counts as the first ADA Title II
+  date for the note `old_title2_date`. MV2's pre-registered census of US special districts'
+  accessibility pages found such a statement, which 0.10.0 flagged. The JSON's `dates` still
+  report every April 24, 2026 the page gives; every placeholder rule, other note, input, output
+  and exit code is unchanged, and the Action (`action_run` 0.10.1) changes only its version. New
+  offline tests: `test_title2_statement_date.py`.
 - **0.10.0:** May 11, 2028. A page that names Section 504, 45 CFR part 84 or HHS and gives May 11,
   2028 but not May 10, 2028 gets the new note `may_11_2028`: 45 CFR 84.84(b) as amended (91 FR
   25507, read on eCFR on 2026-11-12) gives May 11, 2027 for recipients with fifteen or more

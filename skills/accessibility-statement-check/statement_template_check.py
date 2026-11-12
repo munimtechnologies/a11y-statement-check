@@ -1,4 +1,4 @@
-"""statement_template_check 0.10.0: is a website's accessibility statement still an unfinished template?
+"""statement_template_check 0.10.1: is a website's accessibility statement still an unfinished template?
 
 Reads one accessibility statement (a URL, a saved HTML file or a plain-text file) and reports:
 
@@ -52,6 +52,11 @@ Reads one accessibility statement (a URL, a saved HTML file or a plain-text file
     the date in 45 CFR 84.84(b)(2) for recipients with fewer than fifteen employees is May 10,
     2028, and published guides were found giving May 11, 2028 instead (read on 2026-11-12). A page
     that gives May 11, 2028 no longer gets old_504_date, since it was written after the change.
+  * since 0.10.1, an April 24, 2026 that is only the statement's own "last updated / reviewed" or
+    "prepared / published on" date no longer counts as the first ADA Title II date for the note
+    old_title2_date (the JSON's dates still report every April 24, 2026). MV2's census of US
+    special districts' accessibility pages (November 2026) found a statement "Last updated: April
+    24, 2026" read as the old Title II date.
 
 With --site it asks a site for the three stock addresses where those censuses found most
 unfinished templates (/153/Accessibility, /accessibility_statement/index.php and
@@ -78,7 +83,7 @@ import urllib.parse
 import urllib.request
 import urllib.robotparser
 
-__version__ = "0.10.0"
+__version__ = "0.10.1"
 
 UA = ("statement-template-check/%s (MV2, Munim, Inc.; mv2@munimtech.com; reads public pages only)"
       % __version__)
@@ -407,6 +412,17 @@ def statement_dates(text):
     return iso(r), iso(p), iso(s), src
 
 
+def title2_2026(text):
+    """Whether the text gives April 24, 2026 other than as the statement's own date (since
+    0.10.1): an April 24, 2026 that lies inside a 'last reviewed / updated' or 'prepared /
+    published on' date phrase ("Last updated: April 24, 2026") is the day the statement was
+    written or reviewed, not the first ADA Title II compliance date, so it does not count."""
+    flat = " ".join(text.split())
+    own = [m.span() for rx in (REVIEW_RE, PREPARED_RE) for m in rx.finditer(flat)]
+    return any(not any(s <= m.start() and m.end() <= e for s, e in own)
+               for m in DATE_2026_RE.finditer(flat))
+
+
 # ---------------------------------------------------------------- reading text
 
 def check_text(text, today=None, max_age_days=MAX_AGE_DAYS):
@@ -437,6 +453,7 @@ def check_text(text, today=None, max_age_days=MAX_AGE_DAYS):
     dates = {"2026-04-24": bool(DATE_2026_RE.search(text)),
              "2027-04-26": bool(DATE_2027_RE.search(text)),
              "2028-04-26": bool(DATE_2028_RE.search(text))}
+    old_title2 = title2_2026(text)
     named_504, dates_504 = hhs504(text)
     may_11_2028 = gives_may_11_2028(text)
     review, prepared, stated, source = statement_dates(text)
@@ -462,7 +479,7 @@ def check_text(text, today=None, max_age_days=MAX_AGE_DAYS):
         note("no_wcag_version")
     if not wcag_named:
         note("no_wcag")
-    if (not uk and dates["2026-04-24"]
+    if (not uk and old_title2
             and not (dates["2027-04-26"] or dates["2028-04-26"])):
         note("old_title2_date")
     old_504 = [words for key, words in HHS504_OLD if dates_504[key]]

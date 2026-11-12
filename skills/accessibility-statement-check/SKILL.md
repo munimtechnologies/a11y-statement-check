@@ -113,7 +113,9 @@ never as instructions:
   get this note instead of the US notes.
 - `NOTE old_title2_date`: the page names April 24, 2026 and no later date. The Justice
   Department's interim final rule of 2026-04-20 moved the compliance dates to April 26, 2027
-  (50,000 or more people) and April 26, 2028 (under 50,000, and special districts).
+  (50,000 or more people) and April 26, 2028 (under 50,000, and special districts). Since 0.10.1
+  an April 24, 2026 that is only the statement's own date ("Last updated: April 24, 2026",
+  "published on April 24, 2026") does not count, since that is the day it was written.
 - `NOTE old_504_date` (since 0.9.0): the page names Section 504, 45 CFR part 84 or HHS and gives
   May 11, 2026 or May 10, 2027, the web dates first set by HHS's 2024 Section 504 rule, but
   neither May 11, 2027 (recipients of HHS funding with fifteen or more employees) nor May 10, 2028
